@@ -1,0 +1,87 @@
+version: '3.8'
+
+services:
+  redis:
+    image: "redis:alpine"
+    ports:
+      - "6379:6379"
+    networks:
+      - drs-network
+
+  timescaledb:
+    image: timescale/timescaledb-ha:pg14-latest
+    container_name: drs_timescaledb
+    restart: always
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-drsdb}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - timescale-data:/var/lib/postgresql/data
+    networks:
+      - drs-network
+
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "5001:5000"
+    environment:
+      - DATABASE_HOST=timescaledb
+      - REDIS_HOST=redis
+      - POSTGRES_DB=${POSTGRES_DB:-drsdb}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+    env_file: ./.env
+    volumes:
+      - ./backend/uploads:/app/uploads
+    depends_on:
+      - timescaledb
+      - redis
+    networks:
+      - drs-network
+
+  celery_worker:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: always
+    command: celery -A app.celery worker --loglevel=info
+    environment:
+      - DATABASE_HOST=timescaledb
+      - REDIS_HOST=redis
+      - POSTGRES_DB=${POSTGRES_DB:-drsdb}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+    env_file: ./.env
+    volumes:
+      - ./backend/uploads:/app/uploads
+    depends_on:
+      - redis
+      - timescaledb
+      - backend
+    networks:
+      - drs-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - drs-network
+
+volumes:
+  timescale-data:
+
+networks:
+  drs-network:
+    driver: bridge

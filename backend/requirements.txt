@@ -1,0 +1,16 @@
+Flask
+Flask-SQLAlchemy
+Flask-Migrate
+Flask-JWT-Extended
+Flask-Cors
+psycopg2-binary
+celery
+redis
+gunicorn
+python-dotenv
+werkzeug
+numpy
+opencv-python
+# YOLO मॉडल चलाने के लिए PyTorch और Ultralytics
+torch
+ultralytics
