@@ -103,6 +103,14 @@ def analyze_lbw_rules(tracking_data, frame_width, frame_height=None):
             final_decision = "UMPIRE'S CALL"
         # else: shak ka fayda batsman ko => NOT OUT
 
+    # Cricket intelligence: delivery ka physics analysis
+    # (speed, swing, spin, bounce, delivery type)
+    try:
+        from core_processing.ball_physics import analyze_delivery as _analyze_delivery
+        _delivery = _analyze_delivery(trajectory, fps=30, frame_width=frame_width)
+    except Exception:
+        _delivery = None
+
     return {
         "final_decision": final_decision,
         "confidence": confidence,
@@ -118,4 +126,6 @@ def analyze_lbw_rules(tracking_data, frame_width, frame_height=None):
         "stumps_zone": [stumps_zone[0], stumps_zone[1]],
         "trajectory": [[p[0], p[1]] for p in trajectory[-30:]],
         "predicted_path": predicted_path,
+        # Ball physics — speed, swing, spin, delivery type
+        "delivery_analysis": _delivery,
     }

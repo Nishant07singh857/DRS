@@ -107,8 +107,6 @@ wo sabse neeche "TUMHE KYA KARNA HAI" me hain.
     - 44 train / 11 val; YOLOv8n + transfer learning, CPU par ~30 min
     - Results: ball P=1.00/R=0.21/mAP50=0.43, pad mAP50=0.38, bat mAP50=0.08
     - Details: `backend/ai_model/MODEL_CARD.md`
-    - IMAANDAAR NOTE: ye v0 proof-of-concept hai — ball recall low hai (79% miss).
-      Production accuracy ke liye 500+ human-verified images + GPU training chahiye.
 
 29. **Model v1 — video data par train hua**: 4 Wikimedia Commons match videos se
     100 frames nikale, 33 diverse frames label kiye, v0 ke 55 photos ke saath
@@ -119,6 +117,18 @@ wo sabse neeche "TUMHE KYA KARNA HAI" me hain.
       motion-blur hai. Ball recall abhi bhi ~25% hai. LBW ke liye ball sabse
       zaroori hai, is par aur kaam chahiye.
     - Details: `backend/ai_model/MODEL_CARD.md`
+
+30. **Cricket Intelligence — ball physics module** (`backend/core_processing/ball_physics.py`):
+    YOLO ball DHOONDTA hai, ye module samajhta hai ball ne KIYA kya:
+    - **Speed** (km/h) — trajectory + fps + calibration se
+    - **Bounce detection** — ball kahan pitch hui
+    - **Swing** — hawa me lateral movement (bounce se pehle)
+    - **Seam/Spin** — bounce ke baad turn (angle change se)
+    - **Delivery type** — Yorker, Bouncer, Good length, Outswinger, Inswinger,
+      Leg-spin, Off-spin, Seam movement
+    - LBW review output me `delivery_analysis` field jud gaya
+    - IMAANDAAR NOTE: physics rules-based hai (neural net nahi) — calibration
+      (pixels_per_meter) sahi hona zaroori hai. Broadcast view ke liye default 50.
 
 ## TUMHE KYA KARNA HAI (manual steps)
 
