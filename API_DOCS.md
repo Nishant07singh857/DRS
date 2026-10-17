@@ -172,3 +172,33 @@ decision = analyze_lbw_3d(trajectory_3d)
 | 500 | Server error |
 
 **429 aaye to:** `Retry-After` header dekho, utne sec ruko, phir retry karo.
+
+## Pitch Map & Over Summary
+
+### Pitch Map
+```http
+POST /api/reviews/pitch-map
+Authorization: Bearer <token>
+```
+```json
+{
+  "bowler": "Bumrah",
+  "deliveries": [
+    {"pitch_x": 4.5, "pitch_y": 0.1, "outcome": "dot", "speed_kmh": 142}
+  ]
+}
+```
+Returns: `{"svg": "...", "stats": {...}}`
+
+### Over Summary
+```http
+POST /api/reviews/over-summary
+Authorization: Bearer <token>
+```
+```json
+{
+  "over": 1, "bowler": "Bumrah", "batsman": "Kohli",
+  "balls": [{"pitch_3d": [5.5, 0.1, 0.2], "outcome": "dot", "runs": 0, ...}]
+}
+```
+Returns: `{"summary": {...}, "html": "...", "pitch_map_svg": "..."}`

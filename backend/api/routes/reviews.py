@@ -59,3 +59,51 @@ def get_review(review_id):
 
     except Exception as e:
         return jsonify({'message': f'Error fetching review: {str(e)}'}), 500
+
+
+@reviews_bp.route('/reviews/pitch-map', methods=['POST'])
+@jwt_required()
+def pitch_map_endpoint():
+    """
+    Bowler ka pitch map banao.
+    Body: {"bowler": "Bumrah", "deliveries": [
+        {"pitch_x": 4.5, "pitch_y": 0.1, "outcome": "dot", "speed_kmh": 142},
+        ...
+    ]}
+    Returns: {"svg": "<svg>...</svg>", "stats": {...}}
+    """
+    from core_processing.pitch_map import PitchMap
+    data = request.get_json() or {}
+    pm = PitchMap(bowler_name=data.get('bowler', 'Bowler'))
+    for d in data.get('deliveries', []):
+        pm.add_delivery(
+            pitch_x=d.get('pitch_x', 5),
+            pitch_y=d.get('pitch_y', 0),
+            outcome=d.get('outcome', 'dot'),
+            speed_kmh=d.get('speed_kmh'),
+        )
+    return jsonify({'svg': pm.to_svg(), 'stats': pm.get_stats()})
+
+
+@reviews_bp.route('/reviews/over-summary', methods=['POST'])
+@jwt_required()
+def over_summary_endpoint():
+    """
+    Over ka summary + HTML report banao.
+    Body: {"over": 1, "bowler": "...", "batsman": "...", "balls": [...]}
+    Returns: {"summary": {...}, "html": "<html>...</html>"}
+    """
+    from core_processing.over_summary import OverSummary
+    data = request.get_json() or {}
+    over = OverSummary(
+        over_number=data.get('over', 1),
+        bowler=data.get('bowler', 'Bowler'),
+        batsman=data.get('batsman', 'Batsman'),
+    )
+    for b in data.get('balls', []):
+        over.add_ball(b)
+    return jsonify({
+        'summary': over.get_summary(),
+        'html': over.to_html_report(),
+        'pitch_map_svg': over.pitch_map.to_svg(),
+    })

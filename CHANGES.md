@@ -142,3 +142,12 @@ wo sabse neeche "TUMHE KYA KARNA HAI" me hain.
       monitoring — bechne se pehle ka poora checklist
     - **API_DOCS.md**: saare endpoints, rate limits, error codes
     - 9/9 tests pass
+
+35. **Missing features added** (broadcast-standard):
+    - **Pitch Map** (`pitch_map.py`): bowler ne kahan pitch kiya — Yorker/Full/
+      Good/Short zones, line analysis, color-coded outcomes, SVG output
+    - **Over Summary** (`over_summary.py`): 6 balls ka dashboard — runs, wickets,
+      dots, avg/max speed, ball-by-ball table, HTML report
+    - **PDF Export**: HTML report → PDF (weasyprint/pdfkit)
+    - **API endpoints**: `/reviews/pitch-map`, `/reviews/over-summary`
+    - 9/9 tests pass
