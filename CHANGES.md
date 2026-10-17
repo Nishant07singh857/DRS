@@ -161,3 +161,11 @@ wo sabse neeche "TUMHE KYA KARNA HAI" me hain.
     - `PHONE_SETUP_GUIDE.md`: 4-6 phones kaise lagayein, sync kaise karein
     - IMAANDAAR: 1 phone=80-85%, 4 phones=93-96%, Hawk-Eye=99%+
       (6x 340fps cameras + ₹50L hardware abhi bhi aage hai)
+
+33. **Fail-proof tracking system** (`failproof_tracker.py`):
+    - **Ensemble**: v1 (aggressive) + v3 (precise) — dono models se detect
+    - **Motion fallback**: YOLO fail ho to frame differencing se ball dhoondo
+    - **Temporal tracking**: pichhle frames se position predict karo
+    - Test: YOLO 0 hits par bhi 7 motion + 2 predicted — system kabhi khaali nahi!
+    - IMAANDAAR: 100% fail-proof koi system nahi hota, lekin ye 3-layer
+      approach single model se kahin zyada robust hai.
