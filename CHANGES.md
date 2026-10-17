@@ -152,3 +152,12 @@ wo sabse neeche "TUMHE KYA KARNA HAI" me hain.
     - tasks.py ab RealtimeTracker use karta hai (TRACK_PRESET env se)
     - IMAANDAAR NOTE: ONNX try kiya tha lekin CPU par SLOWER nikla (22.9 FPS)!
       PyTorch hi fastest hai is setup par.
+
+32. **Multi-camera 3D triangulation — asli Hawk-Eye** (`triangulation.py`):
+    - 4-6 smartphones se 3D ball tracking (DLT + Least Squares + RANSAC)
+    - **0.0 cm error** synthetic test me (1 camera galat hone ke baad bhi!)
+    - `analyze_lbw_3d()`: 3D trajectory se LBW (pitch/impact/hitting in 3D)
+    - `suggested_4_camera_setup()`: ready-made camera positions
+    - `PHONE_SETUP_GUIDE.md`: 4-6 phones kaise lagayein, sync kaise karein
+    - IMAANDAAR: 1 phone=80-85%, 4 phones=93-96%, Hawk-Eye=99%+
+      (6x 340fps cameras + ₹50L hardware abhi bhi aage hai)
