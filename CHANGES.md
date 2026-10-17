@@ -151,3 +151,10 @@ wo sabse neeche "TUMHE KYA KARNA HAI" me hain.
     - **PDF Export**: HTML report → PDF (weasyprint/pdfkit)
     - **API endpoints**: `/reviews/pitch-map`, `/reviews/over-summary`
     - 9/9 tests pass
+
+36. **Delayed Live Processor** (`delayed_processor.py`) — TV broadcast jaisa:
+    - Ball ke 10 second baad auto-processing shuru
+    - Clip extraction + ball tracking + physics + LBW decision
+    - `process_ball(video, ball_start_sec)` — ek ball
+    - `process_over(video, ball_times)` — poora over
+    - Kyun 10 sec? Ball flight (2s) + trajectory (3s) + processing (5s)
