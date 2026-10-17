@@ -19,13 +19,27 @@ class ObjectTracker:
 
         # नोट: आपको क्रिकेट की छवियों (बॉल, पैड, बैट) पर एक YOLOv8 मॉडल को
         # प्रशिक्षित करके 'cricket_yolo_v8.pt' फ़ाइल खुद बनानी होगी।
+        # Jab tak custom model nahi hai, COCO-pretrained yolov8n fallback use hoga
+        # (sirf 'sports ball' detect karega — pad/bat nahi).
+        self.using_fallback = False
         try:
             self.model = YOLO(model_path)
             self.model.to(self.device)
-            print(f"✅ YOLO मॉडल '{model_path}' से सफलतापूर्वक लोड हो गया।")
+            self.class_map = {"ball": "ball", "pad": "pad", "bat": "bat"}
+            print(f"YOLO model '{model_path}' se load ho gaya (custom cricket model).")
         except Exception as e:
-            print(f"❌ चेतावनी: YOLO मॉडल '{model_path}' नहीं मिला। {e}")
-            self.model = None
+            print(f"Custom model '{model_path}' nahi mila ({e}).")
+            print("Fallback: COCO-pretrained 'yolov8n' load ho raha hai (sirf sports ball).")
+            try:
+                self.model = YOLO("yolov8n.pt")  # pehli baar me auto-download hoga
+                self.model.to(self.device)
+                self.class_map = {"sports ball": "ball"}
+                self.using_fallback = True
+                print("Fallback model ready — ball detection chalegi, pad/bat nahi.")
+            except Exception as e2:
+                print(f"Fallback bhi fail: {e2}")
+                self.model = None
+                self.class_map = {}
 
         # बॉल की ट्रैजेक्टरी को स्टोर करने के लिए
         self.ball_trajectory = deque(maxlen=20)
@@ -61,19 +75,21 @@ class ObjectTracker:
                 conf = box.conf[0]
                 cls = int(box.cls[0])
                 
-                if conf > 0.4: # 40% से ज़्यादा आत्मविश्वास
+                if conf > 0.4:  # 40% se zyada confidence
                     center_x = int((x1 + x2) / 2)
                     center_y = int((y1 + y2) / 2)
-                    
-                    class_name = self.model.names[cls] # क्लास का नाम (जैसे 'ball')
 
-                    if class_name == 'ball':
-                        results_dict['ball'] = (center_x, center_y)
+                    class_name = self.model.names[cls]
+                    # class_map: model ke class name -> hamara standard naam
+                    # (custom model: ball/pad/bat; COCO fallback: sports ball -> ball)
+                    mapped = self.class_map.get(class_name)
+                    if mapped == "ball":
+                        results_dict["ball"] = (center_x, center_y)
                         self.ball_trajectory.append((center_x, center_y))
-                    elif class_name == 'pad':
-                        results_dict['pad'] = (center_x, center_y)
-                    elif class_name == 'bat':
-                        results_dict['bat'] = (center_x, center_y)
+                    elif mapped == "pad":
+                        results_dict["pad"] = (center_x, center_y)
+                    elif mapped == "bat":
+                        results_dict["bat"] = (center_x, center_y)
 
         # नवीनतम ट्रैजेक्टरी अपडेट करें
         results_dict['trajectory'] = list(self.ball_trajectory)

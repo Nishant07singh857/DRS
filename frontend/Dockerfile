@@ -1,6 +1,6 @@
 # Stage 1: Build the React application
 # We use a Node.js image to build the app
-FROM node:16-alpine as build
+FROM node:20-alpine as build
 
 # Set the working directory inside the container
 WORKDIR /app

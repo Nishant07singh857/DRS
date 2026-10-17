@@ -1,0 +1,12 @@
+# path: backend/ai_model/dataset   <-- apne dataset ka folder yahan likho
+# train: images/train
+# val: images/val
+
+# names:
+#   0: ball
+#   1: pad
+#   2: bat
+
+# NOTE: Ye sirf template hai. Asli dataset.yaml tab banao jab labeled
+# images taiyaar hon. Classes ka order (ball, pad, bat) EXACT rakho —
+# tracking_engine.py isi order ki ummeed karta hai.

@@ -5,6 +5,7 @@ import * as api from './api/apiService';
 // Pages
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import LandingPage from './pages/LandingPage';
 import UploadPage from './pages/UploadPage';
 import ReviewGalleryPage from './pages/ReviewGalleryPage';
 import ReviewDetailPage from './pages/ReviewDetailPage';
@@ -65,14 +66,15 @@ function App() {
           <Header />
           <main className="p-4 md:p-8">
             <Routes>
+              <Route path="/" element={<LandingPage />} />
               <Route path="/login" element={!user ? <LoginPage /> : <Navigate to="/" />} />
               <Route path="/register" element={!user ? <RegisterPage /> : <Navigate to="/" />} />
-              
-              <Route path="/" element={user ? <UploadPage /> : <Navigate to="/login" />} />
+
+              <Route path="/upload" element={user ? <UploadPage /> : <Navigate to="/login" />} />
               <Route path="/reviews" element={user ? <ReviewGalleryPage /> : <Navigate to="/login" />} />
               <Route path="/reviews/:id" element={user ? <ReviewDetailPage /> : <Navigate to="/login" />} />
 
-              <Route path="*" element={<Navigate to={user ? "/" : "/login"} />} />
+              <Route path="*" element={<Navigate to="/" />} />
             </Routes>
           </main>
         </div>

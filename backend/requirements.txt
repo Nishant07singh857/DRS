@@ -1,16 +1,18 @@
-Flask
-Flask-SQLAlchemy
-Flask-Migrate
-Flask-JWT-Extended
-Flask-Cors
-psycopg2-binary
-celery
-redis
-gunicorn
-python-dotenv
-werkzeug
-numpy
-opencv-python
-# YOLO मॉडल चलाने के लिए PyTorch और Ultralytics
-torch
-ultralytics
+# Versions pin hain taaki har install par same build mile.
+# Python 3.11 ke saath tested combination.
+Flask==3.0.3
+Flask-SQLAlchemy==3.1.1
+Flask-Migrate==4.0.5
+Flask-JWT-Extended==4.6.0
+Flask-Cors==5.0.0
+psycopg2-binary==2.9.9
+celery==5.3.6
+redis==5.0.1
+gunicorn==21.2.0
+python-dotenv==1.0.1
+Werkzeug==3.0.3
+numpy==1.26.4
+opencv-python==4.9.0.80
+# YOLO model chalane ke liye PyTorch aur Ultralytics (CPU wheels)
+torch==2.2.2
+ultralytics==8.2.0

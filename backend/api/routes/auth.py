@@ -45,7 +45,7 @@ def login():
         if user is None or not user.check_password(data['password']):
             return jsonify({'message': 'Invalid credentials'}), 401
         
-        access_token = create_access_token(identity=user.id)
+        access_token = create_access_token(identity=str(user.id))
         return jsonify({
             'access_token': access_token,
             'user_id': user.id,
@@ -59,7 +59,7 @@ def login():
 @jwt_required()
 def profile():
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = int(get_jwt_identity())
         user = User.query.get(current_user_id)
         
         if not user:

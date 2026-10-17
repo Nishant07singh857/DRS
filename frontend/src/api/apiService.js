@@ -39,8 +39,9 @@ export const uploadVideo = (formData, onUploadProgress) => api.post('/analysis/u
 // Task Status
 export const getTaskStatus = (taskId) => api.get(`/tasks/${taskId}/status`);
 
-// Review Calls
-export const getUserReviews = () => api.get('/reviews');
+// Review Calls (paginated)
+export const getUserReviews = (page = 1, perPage = 20) =>
+  api.get('/reviews', { params: { page, per_page: perPage } });
 export const getReviewById = (id) => api.get(`/reviews/${id}`);
 
 export default api;
