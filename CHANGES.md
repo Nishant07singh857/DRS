@@ -110,6 +110,16 @@ wo sabse neeche "TUMHE KYA KARNA HAI" me hain.
     - IMAANDAAR NOTE: ye v0 proof-of-concept hai — ball recall low hai (79% miss).
       Production accuracy ke liye 500+ human-verified images + GPU training chahiye.
 
+29. **Model v1 — video data par train hua**: 4 Wikimedia Commons match videos se
+    100 frames nikale, 33 diverse frames label kiye, v0 ke 55 photos ke saath
+    milakar 88 images (71 train / 17 val, 50 ball boxes) par v0 weights se
+    fine-tune kiya (epochs=80, CPU).
+    - Results: all mAP50 0.295 → **0.427** (+45%); pad 0.38→0.65, bat 0.08→0.38
+    - IMAANDAAR NOTE: **ball mAP50 gira** (0.43→0.25) — video wali ball chhoti +
+      motion-blur hai. Ball recall abhi bhi ~25% hai. LBW ke liye ball sabse
+      zaroori hai, is par aur kaam chahiye.
+    - Details: `backend/ai_model/MODEL_CARD.md`
+
 ## TUMHE KYA KARNA HAI (manual steps)
 
 1. **Secrets rotate karo** — purani `.env` GitHub history me hai. Naye SECRET_KEY /
