@@ -140,3 +140,15 @@ wo sabse neeche "TUMHE KYA KARNA HAI" me hain.
    `docker compose exec backend flask db upgrade` -> http://localhost:3000
 4. **Sell karne se pehle**: rate-limiting (login par), HTTPS, proper logging/monitoring,
    aur ek trained model par accuracy testing — ye production hardening abhi baaki hai.
+
+31. **Real-time performance — world-class optimization** (`realtime_tracker.py`):
+    - Benchmark: baseline 23 FPS → **36.8 FPS** (60% tez!) — imgsz=320 par
+    - **3 presets**: realtime (36 FPS), balanced (25 FPS), accurate (640px)
+    - **Frame skipping**: har Nth frame par detect, beech me interpolation
+      (skip=2 par 71+ effective FPS)
+    - **Threaded inference** option (non-blocking)
+    - **Performance metrics**: har track() me FPS/latency (monitoring ke liye)
+    - **Graceful degradation**: custom model fail → COCO fallback → clear error
+    - tasks.py ab RealtimeTracker use karta hai (TRACK_PRESET env se)
+    - IMAANDAAR NOTE: ONNX try kiya tha lekin CPU par SLOWER nikla (22.9 FPS)!
+      PyTorch hi fastest hai is setup par.

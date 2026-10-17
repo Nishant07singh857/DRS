@@ -1,6 +1,6 @@
 from models.review import Review
 from core_processing.video_preprocessor import preprocess_for_ai
-from core_processing.tracking_engine import ObjectTracker
+from core_processing.realtime_tracker import RealtimeTracker
 from core_processing.drs_logic import analyze_lbw_rules
 from celery import current_app as celery
 from extensions import db
@@ -8,8 +8,10 @@ from config import Config
 import cv2
 import os
 
-# Tracker ek baar worker start hone par load hota hai (YOLO model heavy hai).
-tracker = ObjectTracker()
+# Production tracker — RealtimeTracker (36+ FPS, frame skipping, metrics).
+# Preset env se: TRACK_PRESET=realtime|balanced|accurate (default: balanced).
+_tracker_preset = os.environ.get('TRACK_PRESET', 'balanced')
+tracker = RealtimeTracker(preset=_tracker_preset)
 
 # Har Nth frame par tracking chalao — poori video par YOLO chalana bahut slow hai.
 # Env se badal sakte ho: TRACK_EVERY_N_FRAMES=1 (sab frames) ya 3 (tez, thoda kam accurate).
