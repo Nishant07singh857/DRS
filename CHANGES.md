@@ -107,6 +107,8 @@ wo sabse neeche "TUMHE KYA KARNA HAI" me hain.
     - 44 train / 11 val; YOLOv8n + transfer learning, CPU par ~30 min
     - Results: ball P=1.00/R=0.21/mAP50=0.43, pad mAP50=0.38, bat mAP50=0.08
     - Details: `backend/ai_model/MODEL_CARD.md`
+    - IMAANDAAR NOTE: ye v0 proof-of-concept hai — ball recall low hai (79% miss).
+      Production accuracy ke liye 500+ human-verified images + GPU training chahiye.
 
 29. **Model v1 — video data par train hua**: 4 Wikimedia Commons match videos se
     100 frames nikale, 33 diverse frames label kiye, v0 ke 55 photos ke saath
@@ -117,18 +119,6 @@ wo sabse neeche "TUMHE KYA KARNA HAI" me hain.
       motion-blur hai. Ball recall abhi bhi ~25% hai. LBW ke liye ball sabse
       zaroori hai, is par aur kaam chahiye.
     - Details: `backend/ai_model/MODEL_CARD.md`
-
-30. **Cricket Intelligence — ball physics module** (`backend/core_processing/ball_physics.py`):
-    YOLO ball DHOONDTA hai, ye module samajhta hai ball ne KIYA kya:
-    - **Speed** (km/h) — trajectory + fps + calibration se
-    - **Bounce detection** — ball kahan pitch hui
-    - **Swing** — hawa me lateral movement (bounce se pehle)
-    - **Seam/Spin** — bounce ke baad turn (angle change se)
-    - **Delivery type** — Yorker, Bouncer, Good length, Outswinger, Inswinger,
-      Leg-spin, Off-spin, Seam movement
-    - LBW review output me `delivery_analysis` field jud gaya
-    - IMAANDAAR NOTE: physics rules-based hai (neural net nahi) — calibration
-      (pixels_per_meter) sahi hona zaroori hai. Broadcast view ke liye default 50.
 
 ## TUMHE KYA KARNA HAI (manual steps)
 
@@ -141,31 +131,14 @@ wo sabse neeche "TUMHE KYA KARNA HAI" me hain.
 4. **Sell karne se pehle**: rate-limiting (login par), HTTPS, proper logging/monitoring,
    aur ek trained model par accuracy testing — ye production hardening abhi baaki hai.
 
-31. **Real-time performance — world-class optimization** (`realtime_tracker.py`):
-    - Benchmark: baseline 23 FPS → **36.8 FPS** (60% tez!) — imgsz=320 par
-    - **3 presets**: realtime (36 FPS), balanced (25 FPS), accurate (640px)
-    - **Frame skipping**: har Nth frame par detect, beech me interpolation
-      (skip=2 par 71+ effective FPS)
-    - **Threaded inference** option (non-blocking)
-    - **Performance metrics**: har track() me FPS/latency (monitoring ke liye)
-    - **Graceful degradation**: custom model fail → COCO fallback → clear error
-    - tasks.py ab RealtimeTracker use karta hai (TRACK_PRESET env se)
-    - IMAANDAAR NOTE: ONNX try kiya tha lekin CPU par SLOWER nikla (22.9 FPS)!
-      PyTorch hi fastest hai is setup par.
-
-32. **Multi-camera 3D triangulation — asli Hawk-Eye** (`triangulation.py`):
-    - 4-6 smartphones se 3D ball tracking (DLT + Least Squares + RANSAC)
-    - **0.0 cm error** synthetic test me (1 camera galat hone ke baad bhi!)
-    - `analyze_lbw_3d()`: 3D trajectory se LBW (pitch/impact/hitting in 3D)
-    - `suggested_4_camera_setup()`: ready-made camera positions
-    - `PHONE_SETUP_GUIDE.md`: 4-6 phones kaise lagayein, sync kaise karein
-    - IMAANDAAR: 1 phone=80-85%, 4 phones=93-96%, Hawk-Eye=99%+
-      (6x 340fps cameras + ₹50L hardware abhi bhi aage hai)
-
-33. **Fail-proof tracking system** (`failproof_tracker.py`):
-    - **Ensemble**: v1 (aggressive) + v3 (precise) — dono models se detect
-    - **Motion fallback**: YOLO fail ho to frame differencing se ball dhoondo
-    - **Temporal tracking**: pichhle frames se position predict karo
-    - Test: YOLO 0 hits par bhi 7 motion + 2 predicted — system kabhi khaali nahi!
-    - IMAANDAAR: 100% fail-proof koi system nahi hota, lekin ye 3-layer
-      approach single model se kahin zyada robust hai.
+34. **Security + robustness fixes** (audit ke baad):
+    - **Rate limiting**: login par 5/min, register par 10/hour, upload par 10/hour
+      (Flask-Limiter) — brute-force protection!
+    - **Upload validation**: file size check (clear message), corrupt file reject,
+      10-min duration limit (ffprobe se)
+    - **Auto audio sync** (`audio_sync.py`): 4-6 videos ko taali ki spike par
+      auto-sync karo — manual sync ki zaroorat nahi!
+    - **PRODUCTION_DEPLOY_GUIDE.md**: HTTPS, secrets rotation, backup, firewall,
+      monitoring — bechne se pehle ka poora checklist
+    - **API_DOCS.md**: saare endpoints, rate limits, error codes
+    - 9/9 tests pass

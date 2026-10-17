@@ -10,7 +10,7 @@ from celery import Celery
 # Extensions ka single source of truth — models, tasks aur routes sab
 # extensions.db use karte hain. (Pehle app.py me alag db instance tha,
 # jo asli bug tha.)
-from extensions import db, migrate, jwt
+from extensions import db, migrate, jwt, limiter
 
 # Celery instance banayein.
 # NOTE: broker/backend constructor me mat do — wo _preconf me jaate hain
@@ -43,6 +43,7 @@ def create_app(config_class=Config):
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
+    limiter.init_app(app)
 
     # CORS sirf allowed origins ke liye (pehle sab ke liye khula tha)
     origins = [

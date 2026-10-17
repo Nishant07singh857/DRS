@@ -1,11 +1,12 @@
 from flask import request, jsonify, Blueprint
 from models.user import User
-from extensions import db
+from extensions import db, limiter
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 
 auth_bp = Blueprint('auth', __name__)
 
 @auth_bp.route('/register', methods=['POST'])
+@limiter.limit("10 per hour")  # spam registration roko
 def register():
     try:
         data = request.get_json()
@@ -34,6 +35,7 @@ def register():
         return jsonify({'message': f'Error creating user: {str(e)}'}), 500
 
 @auth_bp.route('/login', methods=['POST'])
+@limiter.limit("5 per minute")  # brute-force protection
 def login():
     try:
         data = request.get_json()
