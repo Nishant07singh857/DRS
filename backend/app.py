@@ -10,7 +10,7 @@ from celery import Celery
 # Extensions ka single source of truth — models, tasks aur routes sab
 # extensions.db use karte hain. (Pehle app.py me alag db instance tha,
 # jo asli bug tha.)
-from extensions import db, migrate, jwt, limiter
+from extensions import db, migrate, jwt
 
 # Celery instance banayein.
 # NOTE: broker/backend constructor me mat do — wo _preconf me jaate hain
@@ -43,7 +43,6 @@ def create_app(config_class=Config):
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
-    limiter.init_app(app)
 
     # CORS sirf allowed origins ke liye (pehle sab ke liye khula tha)
     origins = [
@@ -74,10 +73,12 @@ def create_app(config_class=Config):
         from api.routes.auth import auth_bp
         from api.routes.analysis import analysis_bp
         from api.routes.reviews import reviews_bp
+        from api.routes.matches import matches_bp
 
         app.register_blueprint(auth_bp, url_prefix="/api/auth")
         app.register_blueprint(analysis_bp, url_prefix="/api/analysis")
         app.register_blueprint(reviews_bp, url_prefix="/api")
+        app.register_blueprint(matches_bp, url_prefix="/api")
 
     return app
 

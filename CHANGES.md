@@ -158,3 +158,13 @@ wo sabse neeche "TUMHE KYA KARNA HAI" me hain.
     - `process_ball(video, ball_start_sec)` — ek ball
     - `process_over(video, ball_times)` — poora over
     - Kyun 10 sec? Ball flight (2s) + trajectory (3s) + processing (5s)
+
+37. **Match infrastructure — world-class foundation** (StreetDRS spec modules B/C/Q):
+    - **Database models** (`models/match.py`): Organization, Venue, Team, Player,
+      Match, Innings, Delivery — clean relationships, audit trail, to_dict()
+    - **Scoring engine** (`scoring_engine.py`): ball-by-ball scoring with validation
+      (galat score reject!), strike rate, economy, partnerships, fall of wickets
+    - **Match API** (`api/routes/matches.py`): teams, players, matches, toss,
+      innings, ball scoring, scorecard — full RESTful flow tested
+    - Test: team → players → match → toss → innings → 6 balls → 13/0
+    - 9/9 existing tests still pass
