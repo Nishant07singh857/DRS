@@ -155,3 +155,82 @@ def apply_offset_info(offsets):
         else:
             lines.append(f"  {name}: synced (reference)")
     return "\n".join(lines)
+
+
+# --- F5/F8: Drift correction + quality score ---
+
+def estimate_drift(audio, sr=44100, check_interval_s=60):
+    """
+    F5: Lambi recording me clock drift detect karo.
+    Har 60 sec me ek clap/marker dhoondo, intervals compare karo.
+    Returns: {'drift_ppm': ..., 'is_stable': bool}
+    """
+    from core_processing.audio_sync import find_clap
+    # Simple: multiple claps dhoondo, spacing check karo
+    spikes = []
+    # find_clap ko multiple baar call karo (segments me)
+    n = len(audio)
+    seg_len = int(check_interval_s * sr)
+    clap_times = []
+    for start in range(0, n, seg_len):
+        seg = audio[start:start + seg_len]
+        if len(seg) < sr:  # 1 sec se chhota segment skip
+            continue
+        idx = find_clap(seg, sr)
+        if idx is not None and idx > 0:
+            clap_times.append((start + idx) / sr)
+
+    if len(clap_times) < 2:
+        return {'drift_ppm': 0, 'is_stable': True,
+                'message': 'Drift check ke liye 2+ markers chahiye'}
+
+    # Intervals
+    intervals = [clap_times[i+1] - clap_times[i]
+                 for i in range(len(clap_times)-1)]
+    expected = check_interval_s
+    deviations = [abs(iv - expected) for iv in intervals]
+    max_dev = max(deviations) if deviations else 0
+
+    # PPM (parts per million)
+    drift_ppm = (max_dev / expected * 1e6) if expected > 0 else 0
+
+    return {
+        'drift_ppm': round(drift_ppm, 1),
+        'max_deviation_s': round(max_dev, 3),
+        'markers_found': len(clap_times),
+        'is_stable': drift_ppm < 100,  # 100ppm se kam = stable
+        'message': 'Stable' if drift_ppm < 100 else f'Drift detected: {drift_ppm:.0f}ppm',
+    }
+
+
+def sync_quality_score(offsets, sr=44100):
+    """
+    F8: Synchronization quality score (0-100).
+    offsets: {video_path: offset_seconds, ...} (sync_videos se)
+    """
+    if not offsets or len(offsets) < 2:
+        return {'score': 0, 'grade': 'N/A',
+                'message': '2+ videos chahiye quality score ke liye'}
+
+    vals = list(offsets.values())
+    max_spread = max(vals) - min(vals)  # sabse bada offset difference
+
+    # Score: 0ms spread = 100, 100ms+ = 0
+    spread_ms = max_spread * 1000
+    score = max(0, min(100, 100 - spread_ms))
+
+    if score >= 90:
+        grade = 'Excellent'
+    elif score >= 70:
+        grade = 'Good'
+    elif score >= 50:
+        grade = 'Fair'
+    else:
+        grade = 'Poor'
+
+    return {
+        'score': round(score, 1),
+        'grade': grade,
+        'max_spread_ms': round(spread_ms, 1),
+        'message': f'Sync {grade}: max offset spread {spread_ms:.0f}ms',
+    }
