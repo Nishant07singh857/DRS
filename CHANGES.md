@@ -212,3 +212,8 @@ wo sabse neeche "TUMHE KYA KARNA HAI" me hain.
     - **P. Broadcast UI**: LiveScoreboard.js + DRSReviewScreen.js (React)
     - QA: 32 modules import OK, all API endpoints pass, 9/9 pytest,
       frontend builds successfully — ZERO errors
+
+41. **VideoReviewPlayer.js** — international third umpire tools:
+    - Slow motion (0.25x/0.5x/1x/2x), frame-by-frame stepping
+    - Zoom (1x-4x), timeline with bookmark markers
+    - Keyboard shortcuts (space/arrows)
