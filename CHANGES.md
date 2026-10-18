@@ -217,3 +217,15 @@ wo sabse neeche "TUMHE KYA KARNA HAI" me hain.
     - Slow motion (0.25x/0.5x/1x/2x), frame-by-frame stepping
     - Zoom (1x-4x), timeline with bookmark markers
     - Keyboard shortcuts (space/arrows)
+
+42. **ICC LBW Protocol** (`drs_logic.py` rewritten) — international ka exact logic:
+    - Step 1: No-ball check → NOT OUT
+    - Step 2: Pitching (leg side → NOT OUT per Law 36)
+    - Step 3: Bat involved (UltraEdge) → NOT OUT
+    - Step 4: Impact (shot/no-shot distinction per ICC)
+    - Step 5: Wickets hitting (Hawk-Eye projection)
+    - Step 6: Umpire's Call (marginal → on-field decision stands)
+    - TV-style step-by-step reasoning har decision me!
+    - Backward compatible: analyze_lbw_rules() ab ICC version call karta hai
+    - 5 scenarios tested: OUT, no-ball, leg-pitch, bat-first, marginal ✅
+    - 9/9 pytest pass
