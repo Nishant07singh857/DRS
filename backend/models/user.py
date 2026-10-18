@@ -11,7 +11,8 @@ class User(db.Model):
     password_hash = db.Column(db.String(256), nullable=False)
     created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
     
-    reviews = db.relationship('Review', backref='user', lazy=True)
+    reviews = db.relationship('Review', backref='user', lazy=True,
+                               foreign_keys='Review.user_id')
     
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)

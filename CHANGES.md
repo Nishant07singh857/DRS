@@ -168,3 +168,16 @@ wo sabse neeche "TUMHE KYA KARNA HAI" me hain.
       innings, ball scoring, scorecard — full RESTful flow tested
     - Test: team → players → match → toss → innings → 6 balls → 13/0
     - 9/9 existing tests still pass
+
+38. **Umpire Control Center** (StreetDRS spec module N):
+    - **Review workflow** (`review_workflow.py`): state machine —
+      pending → processing → completed/inconclusive → confirmed (locked)
+    - **Review model extended**: review_type, status, original_call,
+      ai_recommendation, final_decision, confirmed_by, is_locked, evidence
+    - **Migration** `0002_umpire.py` (hand-written, indexed)
+    - **API**: POST /reviews/request, GET /reviews/queue,
+      POST /reviews/<id>/complete, POST /reviews/<id>/confirm
+      (accept/reject/override), POST /reviews/<id>/retry
+    - Decision locking: locked review change nahi ho sakta
+    - Test: request → queue → AI → override → locked → protection ✅
+    - 9/9 existing tests still pass
