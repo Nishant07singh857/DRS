@@ -181,3 +181,21 @@ wo sabse neeche "TUMHE KYA KARNA HAI" me hain.
     - Decision locking: locked review change nahi ho sakta
     - Test: request → queue → AI → override → locked → protection ✅
     - 9/9 existing tests still pass
+
+39. **StreetDRS full spec — major modules** (user: "sare features bana do"):
+    - **D. Live Match Center**: GET /matches/<id>/live — scoreboard, recent balls,
+      DRS status, team names — ek endpoint me sab
+    - **S1. Wagon Wheel** (`wagon_wheel.py`): mandatory batting analytics —
+      shot zones, color-coded runs, SVG, confirmed vs AI-estimated
+    - **R. Training Mode**: TrainingSession + DeliveryMetric models, full API
+      (sessions, balls, report, complete), bowler/batsman analytics, target accuracy
+    - **T. AI Coach**: rule-based insights (speed, good-length %, target accuracy)
+    - **M. Other DRS** (`other_drs.py`): RunOut, Stumping, Wide, NoBall engines —
+      evidence-based, INCONCLUSIVE jab data kam
+    - **L. UltraEdge** (`ultra_edge.py`): audio spike detection + classification
+      (bat_ball/pad/noise), video alignment
+    - **E. Camera Management**: Camera model + registry API, heartbeat/health,
+      recording control, low-battery alerts
+    - **W/X. Notifications + Audit**: alerts system, audit trail API
+    - Sab test: live center, wagon wheel, training, DRS engines, ultraedge,
+      camera — 9/9 existing tests pass

@@ -256,3 +256,58 @@ def get_scorecard(match_id):
         d['deliveries'] = [deliv.to_dict() for deliv in inn.deliveries]
         result['innings_detail'].append(d)
     return jsonify(result)
+
+
+@matches_bp.route('/matches/<int:match_id>/live', methods=['GET'])
+@jwt_required()
+def live_match_center(match_id):
+    """
+    D. Live Match Center — ek endpoint me sab kuch!
+    Scoreboard, batters, bowler, recent balls, DRS status, system health.
+    """
+    from models.review import Review
+    match = Match.query.get_or_404(match_id)
+
+    # Current innings (live wali)
+    current_inn = None
+    for inn in match.innings:
+        if inn.status == 'live':
+            current_inn = inn
+            break
+    if not current_inn and match.innings:
+        current_inn = match.innings[-1]
+
+    result = match.to_dict()
+    result['live'] = None
+
+    if current_inn:
+        # Recent 12 balls
+        recent = Delivery.query.filter_by(innings_id=current_inn.id)\
+                              .order_by(Delivery.ball_number.desc())\
+                              .limit(12).all()
+        # Is over ki balls
+        live = current_inn.to_dict()
+        live['recent_balls'] = [d.to_dict() for d in reversed(recent)]
+
+        # Batter/Bowler detail (player names ke saath)
+        live['batters_detail'] = []
+        live['bowlers_detail'] = []
+
+        # DRS status (N)
+        pending_reviews = Review.query.filter(
+            Review.match_id == match_id,
+            Review.status.in_(['pending', 'processing'])
+        ).count()
+        live['drs'] = {
+            'pending_reviews': pending_reviews,
+            'status': 'review_pending' if pending_reviews > 0 else 'idle',
+        }
+        result['live'] = live
+
+    # Team names
+    team_a = Team.query.get(match.team_a_id)
+    team_b = Team.query.get(match.team_b_id)
+    result['team_a_name'] = team_a.name if team_a else '?'
+    result['team_b_name'] = team_b.name if team_b else '?'
+
+    return jsonify(result), 200
