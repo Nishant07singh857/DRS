@@ -229,3 +229,10 @@ wo sabse neeche "TUMHE KYA KARNA HAI" me hain.
     - Backward compatible: analyze_lbw_rules() ab ICC version call karta hai
     - 5 scenarios tested: OUT, no-ball, leg-pitch, bat-first, marginal ✅
     - 9/9 pytest pass
+
+43. **multi_camera_fusion.py** — international-style multi-angle fusion:
+    - Har camera se ball detect karo (v2/v4 model)
+    - Clap-sync offsets se temporal alignment
+    - 3D triangulation (calibrated) ya best-camera 2D fallback
+    - ICC 6-step LBW decision fused trajectory par
+    - Per-camera detection stats + multi-view frame count
