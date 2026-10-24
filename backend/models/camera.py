@@ -41,10 +41,15 @@ class Camera(db.Model):
     # Calibration link (G)
     calibration_profile_id = db.Column(db.Integer)
 
+    # One-to-one: har camera ka apna calibration profile (spec G)
+    calibration_profile = db.relationship(
+        'CalibrationProfile', back_populates='camera',
+        uselist=False, cascade='all, delete-orphan')
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def to_dict(self):
-        return {
+        d = {
             'id': self.id, 'name': self.name, 'role': self.role,
             'resolution': self.resolution, 'fps': self.fps,
             'status': self.status, 'battery_pct': self.battery_pct,
@@ -53,6 +58,10 @@ class Camera(db.Model):
             'last_heartbeat': self.last_heartbeat.isoformat() if self.last_heartbeat else None,
             'is_healthy': self.status in ('online', 'recording') and (self.battery_pct or 100) > 20,
         }
+        prof = self.calibration_profile
+        d['calibrated'] = bool(prof and prof.is_calibrated)
+        d['reprojection_error'] = prof.reprojection_error if prof else None
+        return d
 
     def heartbeat(self, battery=None, storage=None, dropped=0):
         """E5: Camera alive hai — health update karo."""
@@ -64,3 +73,47 @@ class Camera(db.Model):
         self.dropped_frames = (self.dropped_frames or 0) + dropped
         if self.status == 'offline':
             self.status = 'online'
+
+
+class CalibrationProfile(db.Model):
+    """
+    Spec G: Camera calibration data.
+
+    Har camera ka intrinsic (lens) + extrinsic (pose) calibration
+    yahan JSON me store hota hai. DLT solve se projection matrix
+    nikalti hai — wahi multi_camera_fusion / triangulation use karta hai.
+    """
+    __tablename__ = 'calibration_profiles'
+
+    id = db.Column(db.Integer, primary_key=True)
+    camera_id = db.Column(db.Integer, db.ForeignKey('cameras.id'),
+                          unique=True, nullable=False)
+    camera = db.relationship('Camera', back_populates='calibration_profile')
+
+    # Sab kuch ek JSON me: intrinsics, extrinsics, correspondences,
+    # projection_matrix — taaki API flexible rahe
+    data = db.Column(db.JSON, default=dict)
+
+    reprojection_error = db.Column(db.Float)  # pixels (mean)
+    is_calibrated = db.Column(db.Boolean, default=False)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow,
+                           onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        d = self.data or {}
+        return {
+            'id': self.id,
+            'camera_id': self.camera_id,
+            'calibrated': self.is_calibrated,
+            'is_calibrated': self.is_calibrated,  # alias
+            'reprojection_error': self.reprojection_error,
+            'has_intrinsics': 'intrinsics' in d,
+            'has_extrinsics': 'extrinsics' in d,
+            'n_correspondences': len((d.get('correspondences') or {}).get('image_points') or []),
+            'intrinsics': d.get('intrinsics'),
+            'extrinsics': d.get('extrinsics'),
+            'projection_matrix': d.get('projection_matrix'),
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }

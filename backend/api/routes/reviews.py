@@ -14,6 +14,18 @@ def _serialize(review):
         'analysis_data': review.analysis_data,
         'video_url': review.video_path,
         'created_at': review.created_at.isoformat() if review.created_at else None,
+        # Umpire Control Center fields (getattr: purane model par bhi safe)
+        'review_type': getattr(review, 'review_type', 'LBW') or 'LBW',
+        'status': getattr(review, 'status', 'completed') or 'completed',
+        'original_call': getattr(review, 'original_call', None),
+        'ai_recommendation': getattr(review, 'ai_recommendation', None),
+        'ai_confidence': getattr(review, 'ai_confidence', None),
+        'final_decision': getattr(review, 'final_decision', None),
+        'confirmed_by': getattr(review, 'confirmed_by', None),
+        'confirmation_note': getattr(review, 'confirmation_note', None),
+        'is_locked': bool(getattr(review, 'is_locked', False)),
+        'evidence': getattr(review, 'evidence', None) or {},
+        'match_id': getattr(review, 'match_id', None),
     }
 
 

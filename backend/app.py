@@ -77,6 +77,7 @@ def create_app(config_class=Config):
         from api.routes.training import training_bp
         from api.routes.system import system_bp
         from api.routes.replay import replay_bp
+        from api.routes.calibration import calibration_bp
 
         app.register_blueprint(auth_bp, url_prefix="/api/auth")
         app.register_blueprint(analysis_bp, url_prefix="/api/analysis")
@@ -85,6 +86,7 @@ def create_app(config_class=Config):
         app.register_blueprint(training_bp, url_prefix="/api")
         app.register_blueprint(system_bp, url_prefix="/api")
         app.register_blueprint(replay_bp, url_prefix="/api")
+        app.register_blueprint(calibration_bp, url_prefix="/api")
 
     return app
 

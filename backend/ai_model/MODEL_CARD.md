@@ -1,47 +1,44 @@
-# Model Card — cricket_yolo_v8.pt
+# Model Card — cricket_yolo_v0.pt
 
 ## Ye kya hai
-DRS ke liye custom YOLOv8n model: cricket **ball**, **pad**, **bat** detect karta hai.
+DRS ke liye pehla custom YOLOv8n model: cricket **ball**, **pad**, **bat** detect karta hai.
 COCO-pretrained weights se transfer learning par bana hai.
 
-## v1 (current) — video data shamil
-- **88 images** — 55 web photos + 33 match video frames (Wikimedia Commons, 4 videos)
-- **Labels**: AI auto-labeling + spot-check
-  - ball: 50 boxes | pad: 235 boxes | bat: 99 boxes
-- **Split**: 71 train / 17 val
-- Base: v0 weights se fine-tune (epochs=80, patience=20, lr0=0.0005, imgsz=416)
+## Training data (v0)
+- **55 images** — web se ikatthi ki gayi cricket batting/bowling photos
+- **Labels**: AI auto-labeling (visual grounding) + spot-check
+  - ball: 30 boxes | pad: 121 boxes | bat: 52 boxes
+- **Split**: 44 train / 11 val
+- **Augmentation**: YOLOv8 defaults (flip, mosaic, HSV jitter)
 
-### Results v1 (val, 17 images)
+## Training config
+- Base: yolov8n.pt (COCO pretrained)
+- epochs=50, patience=15, imgsz=416, batch=8, optimizer=Adam, lr0=0.001
+- Hardware: CPU-only
+
+## Results (validation set, 11 images)
 
 | Class | Precision | Recall | mAP50 | mAP50-95 |
 |-------|-----------|--------|-------|----------|
-| ball  | 0.415 | 0.25 | 0.245 | 0.075 |
-| pad   | 0.755 | 0.556 | 0.653 | 0.264 |
-| bat   | 0.587 | 0.333 | 0.383 | 0.111 |
-| all   | 0.586 | 0.38 | **0.427** | 0.150 |
+| ball  | 1.00 | 0.21 | 0.425 | 0.260 |
+| pad   | 0.23 | 0.42 | 0.382 | 0.174 |
+| bat   | 0.12 | 0.18 | 0.078 | 0.024 |
+| all   | 0.45 | 0.27 | 0.295 | 0.153 |
 
-### v0 vs v1 (imaandaar tulna)
-- **Overall**: v1 behtar — mAP50 0.295 → **0.427** (+45%)
-- **Pad**: 0.382 → **0.653** (+71%) — zabardast sudhaar
-- **Bat**: 0.078 → **0.383** (+391%) — bahut behtar
-- **Ball**: 0.425 → 0.245 (-42%) — **peeche hua** ⚠️
-  - Video frames me ball chhoti + motion-blur wali hai, mushkil hai
-  - Recall thoda badha (0.21 → 0.25) lekin precision/mAP gira
-  - LBW ke liye ball sabse zaroori class hai — ye abhi bhi kamzor hai
+Padhne ka tarika: ball par precision 1.0 matlab jab model "ball" kehta hai to sahi
+kehta hai — lekin recall 0.21 matlab 79% balls miss ho jati hain. v0 ke liye
+expected hai; zyada data se recall badhega.
 
 ## Imaandaar limitations
-1. **Ball detection abhi bhi kamzor** — dono versions me ball recall 25% se kam.
-   Asli match me tez ball ke liye aur data + behtar labeling chahiye.
-2. **Chhota dataset** — 88 images production ke liye kaafi nahi.
-3. **Auto-label noise** — human review nahi hua.
-4. Ye **v1 / improved proof-of-concept** hai — v0 se behtar, lekin "master"
-   banne ke liye 500+ human-verified images + GPU training chahiye.
+1. **Chhota dataset** — 55 images production ke liye kaafi nahi. Ball (chhoti, tez)
+   sabse mushkil class hai; sirf 30 ball examples hain.
+2. **Auto-label noise** — kuch boxes galat ho sakte hain; human review nahi hua.
+3. **Domain gap** — training photos (stills) vs match video frames (motion blur)
+   me farak hai.
+4. Ye **v0 / proof-of-concept** hai — COCO fallback se behtar, lekin asli
+   accuracy ke liye 500+ human-verified images + GPU training chahiye
+   (dekho: `DRS_Dataset_Shortcut_Guide.md`).
 
 ## Agla step
-- Ball par focus: zyada ball examples, motion-blur augmentation
-- 200-500 aur images jodkar v2 train karo (Colab free GPU par)
-
----
-## v0 (purana) — record ke liye
-- 55 images, 44 train / 11 val; ball 30 / pad 121 / bat 52 boxes
-- mAP50: ball 0.425, pad 0.382, bat 0.078, all 0.295
+- 200-500 aur images jodkar v1 train karo (Colab free GPU par)
+- Galat detections ko correct karke active learning loop chalao

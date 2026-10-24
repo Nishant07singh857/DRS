@@ -9,6 +9,8 @@ import LandingPage from './pages/LandingPage';
 import UploadPage from './pages/UploadPage';
 import ReviewGalleryPage from './pages/ReviewGalleryPage';
 import ReviewDetailPage from './pages/ReviewDetailPage';
+import ReviewCenter from './pages/ReviewCenter';
+import LiveMatch from './pages/LiveMatch';
 import Header from './components/Header';
 
 // 1. Auth Context बनाना और एक्सपोर्ट करना
@@ -73,6 +75,8 @@ function App() {
               <Route path="/upload" element={user ? <UploadPage /> : <Navigate to="/login" />} />
               <Route path="/reviews" element={user ? <ReviewGalleryPage /> : <Navigate to="/login" />} />
               <Route path="/reviews/:id" element={user ? <ReviewDetailPage /> : <Navigate to="/login" />} />
+              <Route path="/review/:id" element={user ? <ReviewCenter /> : <Navigate to="/login" />} />
+              <Route path="/live/:matchId" element={user ? <LiveMatch /> : <Navigate to="/login" />} />
 
               <Route path="*" element={<Navigate to="/" />} />
             </Routes>

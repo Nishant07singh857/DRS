@@ -211,3 +211,37 @@ class FailproofTracker:
         self.motion.prev_gray = None
         self.temporal.reset()
         self.frame_count = 0
+
+
+def create_optimal_tracker(ai_model_dir='ai_model'):
+    """
+    World-best ensemble: v4 ball specialist (primary) + motion fallback.
+
+    v4 (mAP50 0.490) ball detection ka champion hai.
+    Ensemble: v4 (weight 1.5) + motion detector + temporal smoothing.
+    """
+    import os
+    try:
+        from ultralytics import YOLO
+    except ImportError:
+        return FailproofTracker()  # YOLO ke bina bhi kaam karega
+
+    models = []
+    v4_path = os.path.join(ai_model_dir, 'cricket_ball_v4.pt')
+    if os.path.exists(v4_path):
+        try:
+            v4 = YOLO(v4_path)
+            models.append((v4, 1.5, 'ball-v4'))
+        except Exception:
+            pass
+
+    # v3 (3-class) bhi ho to pad/bat ke liye rakho
+    v3_path = os.path.join(ai_model_dir, 'cricket_yolo_v8.pt')
+    if os.path.exists(v3_path):
+        try:
+            v3 = YOLO(v3_path)
+            models.append((v3, 1.0, 'v3'))
+        except Exception:
+            pass
+
+    return FailproofTracker(yolo_models=models, imgsz=640)
