@@ -6,9 +6,16 @@ class ObjectTracker:
     """
     एक प्रशिक्षित YOLO मॉडल का उपयोग करके क्रिकेट की वस्तुओं को ट्रैक करने के लिए एक क्लास।
     """
-    def __init__(self, model_path='ai_model/cricket_yolo_v8.pt'):
+    def __init__(self, model_path='ai_model/cricket_ball_v4.pt'):
         """
-        ट्रैकर को इनिशियलाइज़ करता है और YOLO मॉडल को लोड करता है।
+        ट्रैकर को इनिशियलाइज़ करता है और YOLO मॉडल को लोड करता है.
+
+        NOTE: dead code — imported nowhere in production (CV-C4 scope note).
+        Default repointed from the non-existent ai_model/cricket_yolo_v8.pt
+        to the real v4 ball-specialist file, matching RealtimeTracker.
+        Its COCO fallback below is retained only because this module is
+        uncalled; do NOT revive it without the same loud-fail rule as
+        RealtimeTracker.
 
         Args:
             model_path (str): प्रशिक्षित YOLO मॉडल का पथ (.pt फ़ाइल)।
@@ -17,8 +24,7 @@ class ObjectTracker:
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         print(f"YOLO मॉडल के लिए डिवाइस का उपयोग किया जा रहा है: {self.device}")
 
-        # नोट: आपको क्रिकेट की छवियों (बॉल, पैड, बैट) पर एक YOLOv8 मॉडल को
-        # प्रशिक्षित करके 'cricket_yolo_v8.pt' फ़ाइल खुद बनानी होगी।
+        # Default ab v4 ball specialist hai (cricket_yolo_v8.pt maujood nahi).
         # Jab tak custom model nahi hai, COCO-pretrained yolov8n fallback use hoga
         # (sirf 'sports ball' detect karega — pad/bat nahi).
         self.using_fallback = False

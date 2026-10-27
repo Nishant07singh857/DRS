@@ -44,6 +44,8 @@ class Highlight(db.Model):
     __tablename__ = 'highlights'
 
     id = db.Column(db.Integer, primary_key=True)
+    # Phase 1 (SEC-C3): set at generation time from the match owner.
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     match_id = db.Column(db.Integer, db.ForeignKey('matches.id'))
     title = db.Column(db.String(200), nullable=False)
 

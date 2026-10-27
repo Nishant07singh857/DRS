@@ -11,8 +11,8 @@ import sys
 
 # Env vars app import se PEHLE set hon — warna Config fail-fast karega.
 # DATABASE_URL=sqlite se test me Postgres driver ki zaroorat nahi.
-os.environ.setdefault("SECRET_KEY", "test-secret-key")
-os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-secret")
+os.environ.setdefault("SECRET_KEY", "test-secret-key-0123456789abcdef01234567")
+os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-secret-0123456789abcdef01234567")
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 os.environ.setdefault("MAX_UPLOAD_MB", "5")
 
@@ -21,12 +21,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import pytest
 
 from app import create_app, celery
-from extensions import db
+from extensions import db, limiter
 
 
 @pytest.fixture()
 def app():
     application = create_app()
+    limiter.reset()
     application.config["TESTING"] = True
     # Broker ke bina task turant in-process chale;
     # result backend memory me taaki Redis ki zaroorat na pade
@@ -51,10 +52,10 @@ def client(app):
 def _auth_header(client):
     client.post(
         "/api/auth/register",
-        json={"username": "tester", "email": "t@test.com", "password": "pass123"},
+        json={"username": "tester", "email": "t@test.com", "password": "StrongPass123"},
     )
     res = client.post(
-        "/api/auth/login", json={"username": "tester", "password": "pass123"}
+        "/api/auth/login", json={"username": "tester", "password": "StrongPass123"}
     )
     token = res.get_json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
@@ -63,11 +64,11 @@ def _auth_header(client):
 def test_register_login_profile(client):
     assert client.post(
         "/api/auth/register",
-        json={"username": "u1", "email": "u1@x.com", "password": "pass123"},
+        json={"username": "u1", "email": "u1@x.com", "password": "StrongPass123"},
     ).status_code == 201
 
     res = client.post(
-        "/api/auth/login", json={"username": "u1", "password": "pass123"}
+        "/api/auth/login", json={"username": "u1", "password": "StrongPass123"}
     )
     assert res.status_code == 200
     assert "access_token" in res.get_json()
@@ -83,11 +84,11 @@ def test_register_login_profile(client):
 def test_register_duplicate_username(client):
     client.post(
         "/api/auth/register",
-        json={"username": "u2", "email": "u2@x.com", "password": "pass123"},
+        json={"username": "u2", "email": "u2@x.com", "password": "StrongPass123"},
     )
     res = client.post(
         "/api/auth/register",
-        json={"username": "u2", "email": "other@x.com", "password": "pass123"},
+        json={"username": "u2", "email": "other@x.com", "password": "StrongPass123"},
     )
     assert res.status_code == 400
 
@@ -95,10 +96,10 @@ def test_register_duplicate_username(client):
 def test_login_wrong_password(client):
     client.post(
         "/api/auth/register",
-        json={"username": "u3", "email": "u3@x.com", "password": "pass123"},
+        json={"username": "u3", "email": "u3@x.com", "password": "StrongPass123"},
     )
     res = client.post(
-        "/api/auth/login", json={"username": "u3", "password": "wrong"}
+        "/api/auth/login", json={"username": "u3", "password": "WrongPass123"}
     )
     assert res.status_code == 401
 
@@ -161,9 +162,16 @@ def test_video_task_runs_end_to_end(client, tmp_path, monkeypatch):
 
     class FakeTracker:
         def track(self, frame):
-            # Seedhi stumps ki taraf jaati ball (320px wide frame me)
-            traj = [(40 + i * 8, 120) for i in range(16)]  # x: 40 -> 160
-            return {"ball": (160, 120), "trajectory": traj,
+            # Stumps ki taraf jaati ball (320px wide frame me) — BE-C1:
+            # LBW pitching ab BOUNCE point se judge hoti hai, isliye
+            # synthetic trajectory me asli bounce hona chahiye (flat
+            # line par koi bounce nahi hota, to wo INCONCLUSIVE hoti).
+            # Bounce i=8 par (x=104, y=180, ground), phir ball pad tak
+            # jaati hai (impact x=160, in line; stumps zone 128-192).
+            ys = [60, 75, 90, 105, 120, 135, 150, 165,
+                  180, 170, 162, 156, 152, 150, 149, 148]
+            traj = [(40 + i * 8, ys[i]) for i in range(16)]
+            return {"ball": (160, 148), "trajectory": traj,
                     "pad": None, "bat": None}
 
     monkeypatch.setattr(tasks_module, "tracker", FakeTracker())
@@ -196,6 +204,11 @@ def test_video_task_runs_end_to_end(client, tmp_path, monkeypatch):
     assert viz["frame_width"] == 320
     assert Review.query.count() == 1
     assert Review.query.first().decision == "OUT"
+    # SEC-C4: upload ne task_id -> user_id binding likhi hai.
+    from models.security import TaskOwnership
+    owner = TaskOwnership.query.filter_by(task_id=task_id).first()
+    assert owner is not None
+    assert owner.user_id == Review.query.first().user_id
 
 
 def test_reviews_pagination_shape(client):

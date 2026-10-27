@@ -17,12 +17,31 @@ from collections import deque
 
 
 class MotionDetector:
-    """Frame differencing se moving objects dhoondo (YOLO fallback)."""
+    """Frame differencing se moving objects dhoondo (YOLO fallback).
+
+    CV-H5: the reference frame is updated EVERY frame (see
+    FailproofTracker.track, which calls update_reference() even when
+    YOLO hits). The old code updated prev_gray only inside detect(),
+    which track() called only on YOLO misses — so after 30 YOLO-hit
+    frames the next motion diff was against a 30-frame-old frame and
+    bowler/batsman/umpire movement flooded the detector.
+    Area limits are defined at a 1280x720 reference frame and scaled
+    linearly by frame pixel count, instead of fixed pixels at any
+    resolution.
+    """
+
+    # Reference resolution the area limits were tuned at.
+    REF_PIXELS = 1280 * 720
 
     def __init__(self, min_area=50, max_area=5000):
         self.min_area = min_area
         self.max_area = max_area
         self.prev_gray = None
+
+    def update_reference(self, frame):
+        """Advance the background reference to this frame, unconditionally."""
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        self.prev_gray = cv2.GaussianBlur(gray, (5, 5), 0)
 
     def detect(self, frame):
         """
@@ -46,10 +65,16 @@ class MotionDetector:
             thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
         )
 
+        # Scale area limits by frame size (CV-H5).
+        h, w = frame.shape[:2]
+        scale = (h * w) / self.REF_PIXELS if self.REF_PIXELS else 1.0
+        min_area = self.min_area * scale
+        max_area = self.max_area * scale
+
         detections = []
         for cnt in contours:
             area = cv2.contourArea(cnt)
-            if self.min_area < area < self.max_area:
+            if min_area < area < max_area:
                 M = cv2.moments(cnt)
                 if M['m00'] > 0:
                     cx = M['m10'] / M['m00']
@@ -68,9 +93,14 @@ class TemporalTracker:
     def __init__(self, max_history=10, max_jump_px=100):
         self.history = deque(maxlen=max_history)
         self.max_jump = max_jump_px
+        # CV-H4: True when the last update() rejected a detection as a
+        # >max_jump jump. Callers must then label the returned point
+        # 'predicted', never 'yolo'.
+        self.last_rejected = False
 
     def update(self, pos):
         """Nayi detection do, smoothed position lo."""
+        self.last_rejected = False
         if pos is None:
             return self.predict()
 
@@ -79,6 +109,7 @@ class TemporalTracker:
             dist = math.sqrt((pos[0]-last[0])**2 + (pos[1]-last[1])**2)
             if dist > self.max_jump:
                 # Bahut bada jump — galat detection, ignore karo
+                self.last_rejected = True
                 return self.predict()
 
         self.history.append(pos)
@@ -119,13 +150,18 @@ class FailproofTracker:
     4. Confidence score do (kitna bharosa hai)
     """
 
-    def __init__(self, yolo_models=None, imgsz=320):
+    def __init__(self, yolo_models=None, imgsz=320, max_predicted_frames=8):
         """
         yolo_models: [(YOLO_model, weight, name), ...]
         Agar None to sirf motion + temporal (YOLO ke bina bhi kaam karega!)
+        max_predicted_frames (CV-H4): after this many consecutive
+        prediction-only frames the track is dropped (ball=None,
+        source='lost') instead of predicting forever.
         """
         self.yolo_models = yolo_models or []
         self.imgsz = imgsz
+        self.max_predicted_frames = max_predicted_frames
+        self.consecutive_predicted = 0
         self.motion = MotionDetector()
         self.temporal = TemporalTracker()
         self.frame_count = 0
@@ -152,7 +188,10 @@ class FailproofTracker:
                                   imgsz=self.imgsz, conf=0.15)[0]
                 for b in r.boxes:
                     if model.names[int(b.cls)] == 'ball':
-                        conf = float(b.conf) * weight
+                        # CV-H4: weights rank models only; the reported
+                        # confidence is clamped to <= 1.0 (the old
+                        # v4 weight 1.5 produced ball_conf up to 1.35).
+                        conf = min(1.0, float(b.conf) * weight)
                         if conf > best_conf:
                             x1, y1, x2, y2 = b.xyxy[0].tolist()
                             best_ball = ((x1+x2)/2, (y1+y2)/2)
@@ -165,13 +204,15 @@ class FailproofTracker:
             source = 'yolo'
             self.yolo_hits += 1
         else:
-            # Step 2: Motion fallback
+            # Step 2: Motion fallback — ONLY near the predicted track
+            # (CV-H5). With no prediction/history there is no track to
+            # be near, so motion is NOT accepted: the old "smallest
+            # motion blob is the ball" fallback locked onto fielders
+            # and the umpire's arm.
             motions = self.motion.detect(frame)
             if motions:
-                # Temporal prediction ke sabse kareeb wala motion chunno
                 pred = self.temporal.predict()
                 if pred is not None:
-                    # Sabse kareeb motion
                     best = min(motions,
                                key=lambda m: (m[0]-pred[0])**2 + (m[1]-pred[1])**2)
                     dist = math.sqrt((best[0]-pred[0])**2 + (best[1]-pred[1])**2)
@@ -179,26 +220,53 @@ class FailproofTracker:
                         ball_pos, ball_conf = (best[0], best[1]), 0.3
                         source = 'motion'
                         self.motion_hits += 1
-                else:
-                    # Koi history nahi, sabse chhota motion lo
-                    ball_pos, ball_conf = (motions[0][0], motions[0][1]), 0.2
-                    source = 'motion'
-                    self.motion_hits += 1
+        # CV-H5: reference advances EVERY frame, even on YOLO hits
+        # (detect() already advanced it on motion frames).
+        if source != 'motion':
+            self.motion.update_reference(frame)
 
         # Step 3: Temporal smoothing/prediction
         if ball_pos is not None:
             smoothed = self.temporal.update(ball_pos)
+            if self.temporal.last_rejected:
+                # CV-H4: the returned point is a PREDICTION, not the
+                # YOLO detection — label it so, and do not keep the
+                # YOLO confidence on it.
+                source = 'predicted'
+                ball_conf = 0.1
+                self.predicted += 1
+                self.consecutive_predicted += 1
+            else:
+                self.consecutive_predicted = 0
         else:
             smoothed = self.temporal.predict()
             if smoothed is not None:
                 source = 'predicted'
                 ball_conf = 0.1
                 self.predicted += 1
+                self.consecutive_predicted += 1
+            else:
+                self.consecutive_predicted = 0
+
+        # CV-H4: cap consecutive predictions, then drop the track.
+        if (source == 'predicted'
+                and self.consecutive_predicted > self.max_predicted_frames):
+            return {
+                'ball': None,
+                'ball_conf': 0.0,
+                'source': 'lost',
+                'frame_id': self.frame_count,
+                'stats': {
+                    'yolo_hits': self.yolo_hits,
+                    'motion_hits': self.motion_hits,
+                    'predicted': self.predicted,
+                }
+            }
 
         return {
             'ball': smoothed,
             'ball_conf': ball_conf,
-            'source': source,  # 'yolo' | 'motion' | 'predicted' | 'none'
+            'source': source,  # 'yolo' | 'motion' | 'predicted' | 'lost' | 'none'
             'frame_id': self.frame_count,
             'stats': {
                 'yolo_hits': self.yolo_hits,
@@ -211,14 +279,21 @@ class FailproofTracker:
         self.motion.prev_gray = None
         self.temporal.reset()
         self.frame_count = 0
+        self.consecutive_predicted = 0
 
 
 def create_optimal_tracker(ai_model_dir='ai_model'):
     """
-    World-best ensemble: v4 ball specialist (primary) + motion fallback.
+    v4 ball specialist (if present) + motion fallback + temporal smoothing.
 
-    v4 (mAP50 0.490) ball detection ka champion hai.
-    Ensemble: v4 (weight 1.5) + motion detector + temporal smoothing.
+    CORRECTED docstring (CV-C4): the old docstring promised a "v4+v3
+    ensemble", but this function can only ever load v4 as its YOLO
+    model — the v3 file ai_model/cricket_yolo_v8.pt does not exist, so
+    the v3 branch below is opportunistic (it loads only if that file
+    ever appears) and is never part of the default tracker. What this
+    actually builds: v4 (weight 1.5, used for ranking only, confidence
+    clamped to <= 1.0) + MotionDetector + TemporalTracker, with a
+    prediction cap (see FailproofTracker).
     """
     import os
     try:

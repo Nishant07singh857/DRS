@@ -6,7 +6,8 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from extensions import db
 from models.replay import Bookmark, Highlight, BOOKMARK_TYPES, auto_highlights
-from models.match import Delivery
+from models.match import Delivery, Match
+from api.routes.common import current_user_id
 
 replay_bp = Blueprint('replay', __name__)
 
@@ -21,6 +22,11 @@ def create_bookmark():
         return jsonify({'message': f'Type {sorted(BOOKMARK_TYPES)} me se ho'}), 400
     if data.get('timestamp_s') is None:
         return jsonify({'message': 'timestamp_s zaroori hai'}), 400
+    # SEC-C3: kisi doosre user ke match par bookmark nahi.
+    if data.get('match_id') is not None:
+        if not Match.query.filter_by(id=data['match_id'],
+                                     user_id=current_user_id()).first():
+            return jsonify({'message': 'Match nahi mili'}), 404
 
     bm = Bookmark(
         match_id=data.get('match_id'),
@@ -43,7 +49,8 @@ def list_bookmarks():
     """O11: Search by match/type."""
     match_id = request.args.get('match_id', type=int)
     btype = request.args.get('type')
-    q = Bookmark.query
+    # SEC-C3 read leak band: sirf apne bookmarks.
+    q = Bookmark.query.filter_by(user_id=current_user_id())
     if match_id:
         q = q.filter_by(match_id=match_id)
     if btype:
@@ -56,6 +63,10 @@ def list_bookmarks():
 @jwt_required()
 def generate_highlights(match_id):
     """O8: Match se auto highlights banao."""
+    # SEC-C3: sirf apne match se highlights generate ho sakte hain.
+    if not Match.query.filter_by(id=match_id,
+                                 user_id=current_user_id()).first():
+        return jsonify({'message': 'Match nahi mili'}), 404
     deliveries = Delivery.query.filter_by(match_id=match_id)\
         .order_by(Delivery.ball_number).all()
     if not deliveries:
@@ -63,6 +74,7 @@ def generate_highlights(match_id):
 
     highlights = auto_highlights(match_id, [d.to_dict() for d in deliveries])
     for h in highlights:
+        h.user_id = current_user_id()
         db.session.add(h)
     db.session.commit()
     return jsonify({
@@ -75,7 +87,8 @@ def generate_highlights(match_id):
 @jwt_required()
 def list_highlights():
     match_id = request.args.get('match_id', type=int)
-    q = Highlight.query
+    # SEC-C3 read leak band: sirf apne highlights.
+    q = Highlight.query.filter_by(user_id=current_user_id())
     if match_id:
         q = q.filter_by(match_id=match_id)
     hls = q.order_by(Highlight.start_s).all()

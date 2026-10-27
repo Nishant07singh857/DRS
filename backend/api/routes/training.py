@@ -13,6 +13,7 @@ Endpoints:
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from extensions import db
+from api.routes.common import current_user_id
 from models.training import TrainingSession, DeliveryMetric
 from datetime import datetime
 
@@ -50,7 +51,9 @@ def list_sessions():
 @training_bp.route('/training/sessions/<int:sid>/balls', methods=['POST'])
 @jwt_required()
 def add_ball_metric(sid):
-    session = TrainingSession.query.get_or_404(sid)
+    # SEC-C3: create_session/list pehle se owner-bound the; ab
+    # balls/report/complete bhi sirf owner ke liye.
+    session = TrainingSession.query.filter_by(id=sid, user_id=current_user_id()).first_or_404()
     if session.status != 'active':
         return jsonify({'message': 'Session completed hai'}), 400
 
@@ -85,7 +88,7 @@ def add_ball_metric(sid):
 @jwt_required()
 def session_report(sid):
     """R6: Training report + R2/R3 analytics."""
-    session = TrainingSession.query.get_or_404(sid)
+    session = TrainingSession.query.filter_by(id=sid, user_id=current_user_id()).first_or_404()
     metrics = DeliveryMetric.query.filter_by(session_id=sid)\
         .order_by(DeliveryMetric.ball_number).all()
 
@@ -165,7 +168,7 @@ def _generate_insights(metrics, speeds, lengths, targets_hit, n):
 @training_bp.route('/training/sessions/<int:sid>/complete', methods=['POST'])
 @jwt_required()
 def complete_session(sid):
-    session = TrainingSession.query.get_or_404(sid)
+    session = TrainingSession.query.filter_by(id=sid, user_id=current_user_id()).first_or_404()
     session.status = 'completed'
     session.completed_at = datetime.utcnow()
     db.session.commit()

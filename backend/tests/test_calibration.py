@@ -9,8 +9,8 @@ import os
 import sys
 
 # Env vars app import se PEHLE — warna Config fail-fast karega.
-os.environ.setdefault("SECRET_KEY", "test-secret-key")
-os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-secret")
+os.environ.setdefault("SECRET_KEY", "test-secret-key-0123456789abcdef01234567")
+os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-secret-0123456789abcdef01234567")
 os.environ.setdefault("DATABASE_URL", "sqlite:////tmp/test_calib.db")
 os.environ.setdefault("MAX_UPLOAD_MB", "5")
 
@@ -20,7 +20,7 @@ import random
 import pytest
 
 from app import create_app
-from extensions import db
+from extensions import db, limiter
 
 
 @pytest.fixture()
@@ -29,6 +29,7 @@ def app():
     if os.path.exists("/tmp/test_calib.db"):
         os.remove("/tmp/test_calib.db")
     application = create_app()
+    limiter.reset()
     application.config["TESTING"] = True
     with application.app_context():
         db.create_all()
@@ -45,9 +46,9 @@ def client(app):
 def _auth_header(client):
     client.post("/api/auth/register",
                 json={"username": "calib", "email": "c@c.com",
-                      "password": "pass123"})
+                      "password": "StrongPass123"})
     res = client.post("/api/auth/login",
-                      json={"username": "calib", "password": "pass123"})
+                      json={"username": "calib", "password": "StrongPass123"})
     token = res.get_json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 

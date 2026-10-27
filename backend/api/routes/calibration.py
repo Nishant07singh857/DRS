@@ -18,15 +18,24 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 from extensions import db
 from models.camera import Camera, CalibrationProfile
+from api.routes.common import current_user_id
 
 calibration_bp = Blueprint('calibration', __name__)
 
 MIN_CORRESPONDENCES = 6  # DLT ke liye kam se kam 6 points
 
 
-def _get_profile(camera_id):
-    """Camera ka profile lao, nahi hai to banao."""
-    cam = Camera.query.get(camera_id)
+def _get_profile(camera_id, user_id=None):
+    """Camera ka profile lao, nahi hai to banao.
+
+    SEC-C3: camera sirf apne owner ko milta hai — calibration
+    overwrite (jo poore triangulation baseline ko corrupt kar sakta
+    hai) ab kisi doosre user se nahi ho sakta.
+    """
+    if user_id is None:
+        cam = Camera.query.get(camera_id)
+    else:
+        cam = Camera.query.filter_by(id=camera_id, user_id=user_id).first()
     if not cam:
         return None, None
     prof = cam.calibration_profile
@@ -55,7 +64,7 @@ def _update_data(prof, **fields):
 @jwt_required()
 def save_intrinsics(cam_id):
     """Camera ka lens calibration save karo."""
-    cam, prof = _get_profile(cam_id)
+    cam, prof = _get_profile(cam_id, current_user_id())
     if not cam:
         return jsonify({'message': 'Camera nahi mili'}), 404
 
@@ -97,7 +106,7 @@ def save_intrinsics(cam_id):
 @jwt_required()
 def save_extrinsics(cam_id):
     """Camera ki pose (rotation R + translation t) save karo."""
-    cam, prof = _get_profile(cam_id)
+    cam, prof = _get_profile(cam_id, current_user_id())
     if not cam:
         return jsonify({'message': 'Camera nahi mili'}), 404
 
@@ -141,7 +150,7 @@ def save_correspondences():
     if not cam_id or img_pts is None or world_pts is None:
         return jsonify({'message': 'camera_id, image_points, world_points zaroori hain'}), 400
 
-    cam, prof = _get_profile(cam_id)
+    cam, prof = _get_profile(cam_id, current_user_id())
     if not cam:
         return jsonify({'message': 'Camera nahi mili'}), 404
 
@@ -240,7 +249,7 @@ def solve_calibration():
     if not cam_id:
         return jsonify({'message': 'camera_id zaroori hai'}), 400
 
-    cam, prof = _get_profile(cam_id)
+    cam, prof = _get_profile(cam_id, current_user_id())
     if not cam:
         return jsonify({'message': 'Camera nahi mili'}), 404
 
@@ -289,7 +298,7 @@ def solve_calibration():
 @jwt_required()
 def calibration_status(cam_id):
     """Camera ka calibration status dekho."""
-    cam = Camera.query.get(cam_id)
+    cam = Camera.query.filter_by(id=cam_id, user_id=current_user_id()).first()
     if not cam:
         return jsonify({'message': 'Camera nahi mili'}), 404
 

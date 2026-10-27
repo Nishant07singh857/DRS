@@ -5,6 +5,10 @@ Flask-SQLAlchemy==3.1.1
 Flask-Migrate==4.0.5
 Flask-JWT-Extended==4.6.0
 Flask-Cors==5.0.0
+# SEC-C1: pehle requirements me tha hi nahi — fresh install/Docker
+# build par extensions.py import fail hota tha. Venv me installed
+# version ke saath pin kiya gaya hai.
+Flask-Limiter==4.1.1
 psycopg2-binary==2.9.9
 celery==5.3.6
 redis==5.0.1

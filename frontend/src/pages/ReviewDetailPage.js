@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getReviewById } from '../api/apiService';
+import { getReviewById, isUmpiresCall } from '../api/apiService';
 import HawkEyeVisualizer from '../components/HawkEyeVisualizer';
+import PitchMapTool from '../components/PitchMapTool';
 
 function ReviewDetailPage() {
   const { id } = useParams();
@@ -22,12 +23,16 @@ function ReviewDetailPage() {
 
   const analysis = review.analysis_data || {};
   const decisionText = analysis.final_decision || review.decision || 'N/A';
+  // FE-H7: backend "UMPIRE'S CALL" string kabhi nahi deta — flag se
+  // pehchano, warna marginal call flat OUT/NOT OUT dikhta hai.
+  const umpiresCall = isUmpiresCall(review, analysis);
   const decisionColor =
-    decisionText === 'OUT'
-      ? 'text-red-500'
-      : decisionText === "UMPIRE'S CALL"
-        ? 'text-amber-500'
+    umpiresCall
+      ? 'text-amber-500'
+      : decisionText === 'OUT'
+        ? 'text-red-500'
         : 'text-green-500';
+  const confidence = analysis.confidence ?? review.confidence;
 
   const checks = [
     { label: 'Pitching', ok: analysis.pitch_in_line, yes: 'IN-LINE', no: 'OUTSIDE LEG' },
@@ -38,6 +43,10 @@ function ReviewDetailPage() {
   return (
     <div className="container mx-auto max-w-6xl">
       <Link to="/reviews" className="text-indigo-400 hover:underline">&larr; Back to reviews</Link>
+      {/* FE-H1: is page par ReviewCenter ka koi link hi nahi tha. */}
+      <Link to={`/review/${review.id}`} className="text-amber-400 hover:underline ml-4">
+        Open in Review Center &rarr;
+      </Link>
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-2 mt-4 mb-8">
         <div>
           <h1 className="text-4xl font-bold">Review Details</h1>
@@ -63,15 +72,25 @@ function ReviewDetailPage() {
           <h2 className="text-2xl font-semibold border-b border-gray-700 pb-3 mb-4">Umpire's Decision</h2>
           <div className="text-center my-6">
             <p className={`text-6xl font-black uppercase ${decisionColor}`}>{decisionText}</p>
+            {umpiresCall && (
+              <p className="mt-2 text-amber-400 font-bold">
+                ⚖️ UMPIRE'S CALL — on-field decision stands
+                {analysis.overlap_fractions && (
+                  <span className="block text-sm font-normal text-gray-400 mt-1">
+                    overlap: pitching {analysis.overlap_fractions.pitch ?? '—'}, impact {analysis.overlap_fractions.impact ?? '—'}, hitting {analysis.overlap_fractions.hitting ?? '—'}
+                  </span>
+                )}
+              </p>
+            )}
             <div className="mt-4">
               <div className="flex justify-between text-sm text-gray-400 mb-1">
                 <span>Confidence</span>
-                <span>{analysis.confidence ?? review.confidence ?? 'N/A'}%</span>
+                <span>{confidence != null ? `${confidence}%` : 'N/A'}</span>
               </div>
               <div className="bg-gray-700 rounded-full h-2.5">
                 <div
                   className="h-2.5 rounded-full bg-gradient-to-r from-indigo-500 to-emerald-400"
-                  style={{ width: `${analysis.confidence ?? review.confidence ?? 0}%` }}
+                  style={{ width: `${confidence ?? 0}%` }}
                 />
               </div>
             </div>
@@ -89,6 +108,10 @@ function ReviewDetailPage() {
             ))}
           </div>
         </div>
+      </div>
+
+      <div className="mt-8">
+        <PitchMapTool />
       </div>
     </div>
   );

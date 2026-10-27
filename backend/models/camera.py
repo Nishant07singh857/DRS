@@ -20,6 +20,9 @@ class Camera(db.Model):
     __tablename__ = 'cameras'
 
     id = db.Column(db.Integer, primary_key=True)
+    # Phase 1 (SEC-C3): creator/owner — see match.Team.user_id note.
+    # CalibrationProfile is owned via its camera.
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     venue_id = db.Column(db.Integer, db.ForeignKey('venues.id'))
     match_id = db.Column(db.Integer, db.ForeignKey('matches.id'))
 

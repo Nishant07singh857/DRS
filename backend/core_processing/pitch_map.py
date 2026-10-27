@@ -97,6 +97,9 @@ class PitchMap:
             lines[d['line']] = lines.get(d['line'], 0) + 1
             outcomes[d['outcome']] = outcomes.get(d['outcome'], 0) + 1
 
+        # BE-M6: dot-ball % sirf counted balls (wide/no-ball nahi) par —
+        # pehle wides/no-balls bhi denominator me the, jo % ko dabata tha.
+        counted = n - outcomes.get('wide', 0) - outcomes.get('noball', 0)
         return {
             'total': n,
             'bowler': self.bowler_name,
@@ -105,7 +108,8 @@ class PitchMap:
             'lengths': lengths,
             'lines': lines,
             'outcomes': outcomes,
-            'dot_ball_pct': round(outcomes.get('dot', 0)/n*100, 1),
+            'dot_ball_pct': round(outcomes.get('dot', 0)/counted*100, 1)
+                            if counted else 0.0,
             'wickets': outcomes.get('wicket', 0),
         }
 
@@ -114,6 +118,9 @@ class PitchMap:
         Broadcast-style pitch map SVG.
         Pitch vertical: upar = bowler, neeche = batsman.
         """
+        # BE-M6: SVG title me bowler name escape karo (XSS vector tha).
+        import html as _html
+        bowler_name = _html.escape(str(self.bowler_name))
         # Coordinate mapping:
         # pitch_x: 0-10m → y: height-50 (stumps) to 50 (bowler)
         # pitch_y: -1 to +1m → x: 50 to width-50
@@ -151,7 +158,7 @@ class PitchMap:
             f'<rect x="{px(0.11)-3}" y="{height-55}" width="6" height="20" fill="#fff"/>',
             # Title
             f'<text x="{width/2}" y="22" fill="#fff" font-size="14" '
-            f'text-anchor="middle" font-weight="bold">{self.bowler_name} — Pitch Map</text>',
+            f'text-anchor="middle" font-weight="bold">{bowler_name} — Pitch Map</text>',
         ]
 
         # Deliveries

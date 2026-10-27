@@ -13,7 +13,8 @@ const COLORS = {
 };
 
 function HawkEyeVisualizer({ analysis }) {
-  if (!analysis || !analysis.pitch_point || !analysis.impact_point) {
+  const hasPair = (p) => Array.isArray(p) && p.length >= 2 && Number.isFinite(p[0]) && Number.isFinite(p[1]);
+  if (!analysis || !hasPair(analysis.pitch_point) || !hasPair(analysis.impact_point)) {
     return (
       <div className="bg-gray-800 rounded-lg aspect-[16/9] flex items-center justify-center text-gray-500">
         No tracking data available for visualization.
@@ -26,11 +27,24 @@ function HawkEyeVisualizer({ analysis }) {
   const mx = (x) => 70 + (x / fw) * 860;
   const my = (y) => 50 + (y / fh) * 380;
 
-  const traj = (analysis.trajectory || []).map(([x, y]) => [mx(x), my(y)]);
-  const pred = (analysis.predicted_path || []).map(([x, y]) => [mx(x), my(y)]);
-  const pitch = [mx(analysis.pitch_point[0]), my(analysis.pitch_point[1])];
-  const impact = [mx(analysis.impact_point[0]), my(analysis.impact_point[1])];
-  const zone = analysis.stumps_zone || [fw * 0.4, fw * 0.6];
+  // FE-M4: malformed point (object/scalar/null) render ko whitescreen
+  // kar deta tha — sirf [x, y] pairs rakho.
+  const toPair = (p) =>
+    Array.isArray(p) && p.length >= 2 && Number.isFinite(p[0]) && Number.isFinite(p[1])
+      ? [p[0], p[1]]
+      : null;
+  const traj = (analysis.trajectory || []).map(toPair).filter(Boolean).map(([x, y]) => [mx(x), my(y)]);
+  const pred = (analysis.predicted_path || []).map(toPair).filter(Boolean).map(([x, y]) => [mx(x), my(y)]);
+  const pitchPt = toPair(analysis.pitch_point);
+  const impactPt = toPair(analysis.impact_point);
+  const pitch = pitchPt ? [mx(pitchPt[0]), my(pitchPt[1])] : [0, 0];
+  const impact = impactPt ? [mx(impactPt[0]), my(impactPt[1])] : [0, 0];
+  // FE-M6: malformed stumps_zone (length != 2) NaN coordinates banata
+  // tha — validate karo, warna default corridor.
+  const zone = (
+    Array.isArray(analysis.stumps_zone) && analysis.stumps_zone.length === 2 &&
+    Number.isFinite(analysis.stumps_zone[0]) && Number.isFinite(analysis.stumps_zone[1])
+  ) ? analysis.stumps_zone : [fw * 0.4, fw * 0.6];
   const stumpX = mx((zone[0] + zone[1]) / 2);
 
   const line = (pts) => pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
@@ -43,7 +57,10 @@ function HawkEyeVisualizer({ analysis }) {
   const groundY = Math.min(500, Math.max(400, maxY + 70));
 
   const decision = analysis.final_decision || 'N/A';
-  const dColor = COLORS[decision] || '#9ca3af';
+  // FE-H7: marginal call par banner flat OUT/NOT OUT na dikhaye —
+  // umpires_call flag ho to UMPIRE'S CALL banner (amber).
+  const bannerDecision = analysis.umpires_call ? "UMPIRE'S CALL" : decision;
+  const dColor = analysis.umpires_call ? '#f59e0b' : (COLORS[decision] || '#9ca3af');
   const pitchColor = analysis.pitch_in_line ? '#22c55e' : '#fbbf24';
   const impactColor = analysis.impact_in_line ? '#22c55e' : '#ef4444';
 
@@ -138,14 +155,14 @@ function HawkEyeVisualizer({ analysis }) {
         <g>
           <rect x="24" y="24" width="300" height="86" rx="10" fill="#000000" opacity="0.55" />
           <text x="44" y="58" fill="#ffffff" opacity="0.7" fontSize="14" letterSpacing="3">AI UMPIRE DECISION</text>
-          <text x="44" y="94" fill={dColor} fontSize="34" fontWeight="900" letterSpacing="1">{decision}</text>
+          <text x="44" y="94" fill={dColor} fontSize="34" fontWeight="900" letterSpacing="1">{bannerDecision}</text>
         </g>
 
         {/* Confidence */}
         <g>
           <rect x={W - 224} y="24" width="200" height="86" rx="10" fill="#000000" opacity="0.55" />
           <text x={W - 204} y="58" fill="#ffffff" opacity="0.7" fontSize="14" letterSpacing="3">CONFIDENCE</text>
-          <text x={W - 204} y="94" fill="#ffffff" fontSize="34" fontWeight="900">{analysis.confidence ?? '—'}%</text>
+          <text x={W - 204} y="94" fill="#ffffff" fontSize="34" fontWeight="900">{typeof analysis.confidence === 'number' ? `${analysis.confidence}%` : '—'}</text>
         </g>
 
         {/* Legend */}

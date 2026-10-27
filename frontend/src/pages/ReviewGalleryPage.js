@@ -19,8 +19,14 @@ function ReviewGalleryPage() {
   if (loading) return <div className="text-center mt-10">Loading reviews...</div>;
   if (error) return <div className="text-center mt-10 text-red-500">{error}</div>;
 
-  const colorFor = (d) =>
-    d === 'OUT' ? 'text-red-500' : d === "UMPIRE'S CALL" ? 'text-amber-500' : 'text-green-500';
+  // FE-M1: pehle PENDING bhi green (NOT OUT colour) dikhta tha,
+  // aur confidence null par "Confidence: %" dikhta tha. FE-H7:
+  // umpires_call flag ho to amber.
+  const colorFor = (r) =>
+    r.analysis_data?.umpires_call ? 'text-amber-500'
+    : r.decision === 'OUT' ? 'text-red-500'
+    : r.decision === 'NOT OUT' ? 'text-green-500'
+    : 'text-amber-500';
 
   return (
     <div className="max-w-4xl mx-auto mt-10">
@@ -37,8 +43,11 @@ function ReviewGalleryPage() {
             >
               <div className="flex justify-between items-center">
                 <div>
-                  <span className={`text-2xl font-bold ${colorFor(r.decision)}`}>{r.decision}</span>
-                  <span className="text-gray-400 ml-3">Confidence: {r.confidence}%</span>
+                  <span className={`text-2xl font-bold ${colorFor(r)}`}>{r.decision}</span>
+                  {r.analysis_data?.umpires_call && (
+                    <span className="text-amber-400 ml-2 text-sm font-bold">UMPIRE'S CALL</span>
+                  )}
+                  <span className="text-gray-400 ml-3">Confidence: {r.confidence ?? '—'}{r.confidence != null ? '%' : ''}</span>
                 </div>
                 <span className="text-gray-500 text-sm">
                   {r.created_at ? new Date(r.created_at).toLocaleString() : ''}

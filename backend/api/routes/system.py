@@ -5,6 +5,7 @@ System API — cameras, notifications, audit (E, W, X).
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from extensions import db
+from api.routes.common import current_user_id
 from models.camera import Camera, CAMERA_ROLES
 from models.system import Notification, AuditLog, notify, log_audit
 from datetime import datetime
@@ -26,6 +27,8 @@ def register_camera():
 
     cam = Camera(
         name=data['name'],
+        # SEC-C3: camera ka owner = register karne wala user.
+        user_id=current_user_id(),
         role=data.get('role', 'main'),
         device_id=data.get('device_id'),
         venue_id=data.get('venue_id'),
@@ -37,8 +40,8 @@ def register_camera():
     db.session.add(cam)
     db.session.commit()
 
-    log_audit(int(get_jwt_identity()), 'camera.registered',
-              'camera', cam.id, {'name': cam.name})
+    log_audit(current_user_id(), 'camera.registered',
+              'camera', cam.id, {'name': cam.name}, ip=request.remote_addr)
     db.session.commit()
     return jsonify(cam.to_dict()), 201
 
@@ -47,7 +50,8 @@ def register_camera():
 @jwt_required()
 def list_cameras():
     match_id = request.args.get('match_id', type=int)
-    q = Camera.query
+    # SEC-C3: sirf apne cameras.
+    q = Camera.query.filter_by(user_id=current_user_id())
     if match_id:
         q = q.filter_by(match_id=match_id)
     cams = q.all()
@@ -58,7 +62,7 @@ def list_cameras():
 @jwt_required()
 def camera_heartbeat(cam_id):
     """E5: Camera health update."""
-    cam = Camera.query.get_or_404(cam_id)
+    cam = Camera.query.filter_by(id=cam_id, user_id=current_user_id()).first_or_404()
     data = request.get_json() or {}
     cam.heartbeat(
         battery=data.get('battery_pct'),
@@ -81,7 +85,7 @@ def camera_heartbeat(cam_id):
 @jwt_required()
 def camera_status(cam_id):
     """Recording start/stop, offline mark karo."""
-    cam = Camera.query.get_or_404(cam_id)
+    cam = Camera.query.filter_by(id=cam_id, user_id=current_user_id()).first_or_404()
     data = request.get_json() or {}
     new_status = data.get('status')
     if new_status not in ('online', 'offline', 'recording', 'error'):
@@ -110,7 +114,10 @@ def list_notifications():
 @system_bp.route('/notifications/<int:nid>/read', methods=['POST'])
 @jwt_required()
 def mark_read(nid):
-    n = Notification.query.get_or_404(nid)
+    # SEC-C3: sirf apni notification mark ho — broadcast (user_id
+    # NULL) wali kisi ek user ke read karne se sab par asar karti,
+    # isliye wo yahan 404 hai.
+    n = Notification.query.filter_by(id=nid, user_id=current_user_id()).first_or_404()
     n.is_read = True
     db.session.commit()
     return jsonify(n.to_dict()), 200
@@ -124,7 +131,8 @@ def list_audit():
     """X9: Audit trail dekho."""
     entity = request.args.get('entity_type')
     eid = request.args.get('entity_id', type=int)
-    q = AuditLog.query
+    # SEC-C3 read leak band: sirf apne audit rows.
+    q = AuditLog.query.filter_by(user_id=current_user_id())
     if entity:
         q = q.filter_by(entity_type=entity)
     if eid:

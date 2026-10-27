@@ -61,6 +61,10 @@ class Team(db.Model):
     __tablename__ = 'teams'
 
     id = db.Column(db.Integer, primary_key=True)
+    # Phase 1 (SEC-C3): creator/owner. Nullable only for legacy rows
+    # created before this column existed; those rows are not writable
+    # via the API (ownership filter requires an exact match).
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'))
     name = db.Column(db.String(100), nullable=False)
     short_name = db.Column(db.String(10))  # "MI", "CSK"
@@ -101,6 +105,8 @@ class Match(db.Model):
     __tablename__ = 'matches'
 
     id = db.Column(db.Integer, primary_key=True)
+    # Phase 1 (SEC-C3): creator/owner — see Team.user_id note.
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'))
     venue_id = db.Column(db.Integer, db.ForeignKey('venues.id'))
     title = db.Column(db.String(200), nullable=False)  # "Final: Team A vs Team B"
@@ -132,6 +138,8 @@ class Match(db.Model):
     def to_dict(self):
         return {
             'id': self.id, 'title': self.title,
+            # BE-M4: venue/organization ids pehle gayab the.
+            'venue_id': self.venue_id, 'organization_id': self.organization_id,
             'team_a_id': self.team_a_id, 'team_b_id': self.team_b_id,
             'match_format': self.match_format,
             'overs_per_innings': self.overs_per_innings,
@@ -157,7 +165,13 @@ class Innings(db.Model):
     total_runs = db.Column(db.Integer, default=0)
     total_wickets = db.Column(db.Integer, default=0)
     total_overs = db.Column(db.Float, default=0.0)  # 4.3 = 4 overs 3 balls
-    total_balls = db.Column(db.Integer, default=0)  # legal balls
+    # BE-H5: total_balls = SAB deliveries (wide/no-ball samet); legal
+    # balls ka alag count total_legal_balls me. Pehle total_balls har
+    # ball par badhta tha lekin comment "legal balls" kehta tha, aur
+    # run rate total_balls se nikalta tha jabki total_overs legal-only
+    # tha — dono disagree karte the.
+    total_balls = db.Column(db.Integer, default=0)  # all deliveries
+    total_legal_balls = db.Column(db.Integer, default=0)  # legal only
 
     status = db.Column(db.String(20), default='not_started')  # live/completed
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -167,14 +181,20 @@ class Innings(db.Model):
                                  order_by='Delivery.ball_number')
 
     def to_dict(self):
+        # Run rate hamesha LEGAL balls se (BE-H5): wides/no-balls ke
+        # baad bhi total_overs aur run rate ek-doosre se agree karenge.
+        # Legacy rows (total_legal_balls NULL) par total_balls fallback.
+        legal = (self.total_legal_balls if self.total_legal_balls is not None
+                 else self.total_balls)
         return {
             'id': self.id, 'innings_number': self.innings_number,
             'batting_team_id': self.batting_team_id,
             'total_runs': self.total_runs, 'total_wickets': self.total_wickets,
             'total_overs': self.total_overs, 'total_balls': self.total_balls,
+            'total_legal_balls': legal,
             'status': self.status,
-            'run_rate': round(self.total_runs / (self.total_balls / 6), 2)
-                        if self.total_balls > 0 else 0,
+            'run_rate': round(self.total_runs / (legal / 6), 2)
+                        if legal > 0 else 0,
         }
 
 
@@ -218,11 +238,19 @@ class Delivery(db.Model):
 
     def to_dict(self):
         return {
-            'id': self.id, 'over_number': self.over_number,
+            # BE-M4: pehle innings_id/match_id/ball_number/non_striker/
+            # out_player/review_id gayab the — additive fields hain.
+            'id': self.id, 'innings_id': self.innings_id,
+            'match_id': self.match_id,
+            'over_number': self.over_number,
+            'ball_number': self.ball_number,
             'ball_in_over': self.ball_in_over,
             'bowler_id': self.bowler_id, 'striker_id': self.striker_id,
+            'non_striker_id': self.non_striker_id,
             'runs_off_bat': self.runs_off_bat, 'extras': self.extras,
             'total_runs': self.total_runs,
             'is_wicket': self.is_wicket, 'wicket_type': self.wicket_type,
+            'out_player_id': self.out_player_id,
+            'review_id': self.review_id,
             'is_legal': self.is_legal,
         }

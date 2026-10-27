@@ -1,4 +1,5 @@
 import React from 'react';
+import { isUmpiresCall } from '../api/apiService';
 
 /**
  * DRSReviewScreen — umpire review screen (P2).
@@ -14,16 +15,30 @@ function DRSReviewScreen({ review }) {
     inconclusive: '#eab308', confirmed: '#10b981', failed: '#ef4444',
   }[review.status] || '#6b7280';
 
+  // FE-H2: pehle Final Decision sirf locked review par dikhta tha,
+  // baaki par hamesha "Pending…" — jabki review.decision (pipeline
+  // review ka AI decision) pehle se maujood tha. Ab: locked ho to
+  // final_decision; warna final_decision, phir decision (PENDING
+  // chhodkar), aur tabhi "Pending…" jab koi decision hi nahi hai.
+  // AI Recommendation box bhi decision se fallback leta hai taaki
+  // legacy review "..." na dikhaye.
+  const shownDecision =
+    review.final_decision ||
+    (review.decision && review.decision !== 'PENDING' ? review.decision : null);
+  const shownAi =
+    review.ai_recommendation || shownDecision;
   const decisionColor = {
     'OUT': '#ef4444', 'NOT OUT': '#22c55e', 'INCONCLUSIVE': '#eab308',
-  }[review.final_decision || review.ai_recommendation] || '#fff';
+  }[review.final_decision || shownAi] || '#fff';
+  const umpiresCall = isUmpiresCall(review);
+  const overlaps = review.analysis_data?.overlap_fractions || null;
 
   return (
     <div style={styles.container}>
       <div style={styles.header}>
         <span style={styles.type}>{review.review_type} REVIEW</span>
         <span style={{ ...styles.status, backgroundColor: statusColor }}>
-          {review.status.toUpperCase()}
+          {(review.status || 'unknown').toUpperCase()}
         </span>
       </div>
 
@@ -36,7 +51,7 @@ function DRSReviewScreen({ review }) {
         <div style={styles.arrow}>→</div>
         <div style={styles.callBox}>
           <div style={styles.label}>AI Recommendation</div>
-          <div style={styles.call}>{review.ai_recommendation || '...'}</div>
+          <div style={styles.call}>{shownAi || '...'}</div>
           {review.ai_confidence != null && (
             <div style={styles.conf}>{review.ai_confidence}% confident</div>
           )}
@@ -45,11 +60,29 @@ function DRSReviewScreen({ review }) {
         <div style={{ ...styles.callBox, borderColor: decisionColor }}>
           <div style={styles.label}>Final Decision</div>
           <div style={{ ...styles.call, color: decisionColor }}>
-            {review.is_locked ? (review.final_decision || '—') : 'Pending...'}
+            {review.is_locked ? (review.final_decision || '—') : (shownDecision || 'Pending...')}
           </div>
+          {!review.is_locked && shownDecision && !review.final_decision && (
+            <div style={styles.conf}>AI decision — umpire confirm karega</div>
+          )}
           {review.is_locked && <div style={styles.locked}>🔒 LOCKED</div>}
         </div>
       </div>
+
+      {/* FE-H7: Umpire's Call — backend decision string me kabhi nahi
+          aata, sirf umpires_call flag me. Clear OUT/NOT OUT se alag
+          dikhao: on-field decision stands. */}
+      {umpiresCall && (
+        <div style={styles.umpiresCall}>
+          ⚖️ UMPIRE'S CALL — on-field decision stands
+          {overlaps && (
+            <span style={styles.overlaps}>
+              {' '}
+              (overlap: pitching {overlaps.pitch ?? '—'}, impact {overlaps.impact ?? '—'}, hitting {overlaps.hitting ?? '—'})
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Evidence */}
       {review.evidence && Object.keys(review.evidence).length > 0 && (
@@ -95,6 +128,11 @@ const styles = {
   conf: { fontSize: 12, opacity: 0.7, marginTop: 4 },
   arrow: { fontSize: 20, opacity: 0.5 },
   locked: { fontSize: 11, color: '#10b981', marginTop: 4, fontWeight: 'bold' },
+  umpiresCall: {
+    marginBottom: 16, backgroundColor: '#78350f', border: '1px solid #f59e0b',
+    borderRadius: 8, padding: 10, fontSize: 13, fontWeight: 'bold', color: '#fde68a',
+  },
+  overlaps: { fontWeight: 'normal', opacity: 0.85 },
   evidence: { backgroundColor: '#1e293b', borderRadius: 8, padding: 12 },
   pre: { fontSize: 12, overflow: 'auto', margin: 0 },
   note: {

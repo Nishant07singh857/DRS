@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 
 /**
  * VideoReviewPlayer — international third umpire jaisa video review tool.
@@ -8,39 +8,70 @@ import React, { useRef, useState, useEffect } from 'react';
  * - Frame-by-frame stepping (←/→)
  * - Zoom in/out (video par)
  * - Timeline with event markers (bookmarks)
- * - Keyboard shortcuts
+ * - Keyboard shortcuts (sirf player focused ho aur user kisi input me
+ *   type na kar raha ho tab — FE-H4)
  */
 
 const SPEEDS = [0.25, 0.5, 1, 2];
 
+function isTypingTarget(target) {
+  if (!target) return false;
+  const tag = (target.tagName || '').toLowerCase();
+  return (
+    tag === 'input' ||
+    tag === 'textarea' ||
+    tag === 'select' ||
+    target.isContentEditable
+  );
+}
+
 function VideoReviewPlayer({ videoUrl, bookmarks = [], fps = 30 }) {
   const videoRef = useRef(null);
+  const wrapRef = useRef(null);
   const [playing, setPlaying] = useState(false);
   const [speedIdx, setSpeedIdx] = useState(2); // 1x
   const [zoom, setZoom] = useState(1);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  // FE-C1: <video> pe HTML (nginx fallback) ya 401/404 mile to pehle
+  // silently fail hota tha. Ab saaf error dikhta hai.
+  const [videoError, setVideoError] = useState('');
 
   const speed = SPEEDS[speedIdx];
+
+  useEffect(() => {
+    setVideoError('');
+  }, [videoUrl]);
 
   useEffect(() => {
     const v = videoRef.current;
     if (v) v.playbackRate = speed;
   }, [speed]);
 
-  const togglePlay = () => {
+  const togglePlay = useCallback(() => {
     const v = videoRef.current;
     if (!v) return;
-    if (v.paused) { v.play(); setPlaying(true); }
-    else { v.pause(); setPlaying(false); }
-  };
+    if (v.paused) {
+      // FE-L7: interrupted play() ka unhandled rejection console me
+      // aata tha — catch karo.
+      const p = v.play();
+      if (p && typeof p.catch === 'function') p.catch(() => {});
+      setPlaying(true);
+    } else {
+      v.pause();
+      setPlaying(false);
+    }
+  }, []);
 
-  const stepFrame = (dir) => {
+  const stepFrame = useCallback((dir) => {
     const v = videoRef.current;
     if (!v) return;
-    v.pause(); setPlaying(false);
-    v.currentTime = Math.max(0, Math.min(v.duration, v.currentTime + (dir / fps)));
-  };
+    // FE-L7: NaN duration par currentTime NaN ho jata tha.
+    if (!Number.isFinite(v.duration)) return;
+    v.pause();
+    setPlaying(false);
+    v.currentTime = Math.max(0, Math.min(v.duration, v.currentTime + dir / fps));
+  }, [fps]);
 
   const jumpTo = (t) => {
     const v = videoRef.current;
@@ -49,25 +80,42 @@ function VideoReviewPlayer({ videoUrl, bookmarks = [], fps = 30 }) {
 
   const cycleSpeed = () => setSpeedIdx((speedIdx + 1) % SPEEDS.length);
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts — FE-H4: pehle window-level listener bina
+  // target check ke tha, isliye ReviewCenter ke override-note
+  // textarea me space dabane par bhi playback toggle hota tha, aur
+  // dep array na hone se har time-update render par listener
+  // dobara lagta tha. Ab: (1) input/textarea/select/contentEditable
+  // me typing ho to ignore; (2) sirf tab jab player focused ho ya
+  // uske andar focus ho — warna page ke baaki shortcuts/typing
+  // hijack nahi hote; (3) stable deps, listener ek baar lagta hai.
+  const togglePlayRef = useRef(togglePlay);
+  togglePlayRef.current = togglePlay;
+  const stepFrameRef = useRef(stepFrame);
+  stepFrameRef.current = stepFrame;
   useEffect(() => {
     const handler = (e) => {
-      if (e.key === ' ') { e.preventDefault(); togglePlay(); }
-      else if (e.key === 'ArrowRight') stepFrame(1);
-      else if (e.key === 'ArrowLeft') stepFrame(-1);
+      if (isTypingTarget(e.target)) return;
+      const wrap = wrapRef.current;
+      if (wrap && !wrap.contains(document.activeElement)) return;
+      if (e.key === ' ') {
+        e.preventDefault();
+        togglePlayRef.current();
+      } else if (e.key === 'ArrowRight') stepFrameRef.current(1);
+      else if (e.key === 'ArrowLeft') stepFrameRef.current(-1);
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  });
+  }, []);
 
   const fmt = (s) => {
+    if (!Number.isFinite(s)) return '0:00.0';
     const m = Math.floor(s / 60);
     const sec = (s % 60).toFixed(1);
     return `${m}:${sec.padStart(4, '0')}`;
   };
 
   return (
-    <div style={styles.container}>
+    <div style={styles.container} ref={wrapRef} tabIndex={0}>
       {/* Video with zoom */}
       <div style={styles.videoWrap}>
         <video
@@ -77,7 +125,13 @@ function VideoReviewPlayer({ videoUrl, bookmarks = [], fps = 30 }) {
           onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)}
           onLoadedMetadata={(e) => setDuration(e.target.duration)}
           onEnded={() => setPlaying(false)}
+          onError={() => setVideoError('Video load nahi ho payi — file missing ho sakti hai ya access nahi hai.')}
         />
+        {videoError && (
+          <div style={styles.videoError}>
+            ⚠️ {videoError}
+          </div>
+        )}
         {/* Zoom controls overlay */}
         <div style={styles.zoomControls}>
           <button style={styles.zbtn} onClick={() => setZoom(Math.max(1, zoom - 0.5))}>−</button>
@@ -135,7 +189,7 @@ function VideoReviewPlayer({ videoUrl, bookmarks = [], fps = 30 }) {
       </div>
 
       <div style={styles.hint}>
-        Space = play/pause · ←/→ = frame step · Click markers to jump
+        Player par click karke focus karo, phir: Space = play/pause · ←/→ = frame step · Click markers to jump
       </div>
     </div>
   );
@@ -151,6 +205,11 @@ const styles = {
     overflow: 'hidden', aspectRatio: '16/9',
   },
   video: { width: '100%', height: '100%', objectFit: 'contain', transition: 'transform 0.2s' },
+  videoError: {
+    position: 'absolute', left: 8, right: 8, bottom: 8,
+    backgroundColor: 'rgba(127,29,29,0.9)', color: '#fff',
+    borderRadius: 6, padding: '8px 12px', fontSize: 13, textAlign: 'center',
+  },
   zoomControls: {
     position: 'absolute', top: 8, right: 8, display: 'flex',
     gap: 4, alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)',

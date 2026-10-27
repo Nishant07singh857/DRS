@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../App';
 
 function LoginPage() {
@@ -8,6 +8,19 @@ function LoginPage() {
   const [error, setError] = useState('');
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  // FE-C2: mid-flow token expiry par interceptor reload ki jagah
+  // yahan laata hai — explicit message ke saath, login error ke
+  // saath confuse nahi hona chahiye.
+  let sessionExpired = Boolean(location.state?.sessionExpired);
+  try {
+    if (sessionStorage.getItem('sessionExpired') === '1') {
+      sessionExpired = true;
+      sessionStorage.removeItem('sessionExpired');
+    }
+  } catch (e) {
+    // ignore
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -23,6 +36,11 @@ function LoginPage() {
   return (
     <div className="max-w-md mx-auto mt-16 bg-gray-800 p-8 rounded-lg shadow-lg">
       <h1 className="text-3xl font-bold mb-6 text-center">Login</h1>
+      {sessionExpired && (
+        <p className="bg-amber-500/20 text-amber-300 p-3 rounded mb-4">
+          Session expired ho gaya hai — dobara login karo.
+        </p>
+      )}
       {error && <p className="bg-red-500/20 text-red-400 p-3 rounded mb-4">{error}</p>}
       <form onSubmit={handleSubmit} className="space-y-4">
         <input

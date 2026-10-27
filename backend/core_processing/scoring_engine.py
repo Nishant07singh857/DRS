@@ -52,6 +52,31 @@ def validate_delivery(runs_off_bat=0, extras=None, is_wicket=False,
     if extras.get('wide', 0) > 0 and runs_off_bat > 0:
         raise ScoringError("Wide par bat se run nahi ho sakta")
 
+    # Bat runs + bye/leg-bye ek saath impossible (overthrows unmodelled)
+    if runs_off_bat > 0 and (extras.get('bye', 0) > 0
+                             or extras.get('legbye', 0) > 0):
+        raise ScoringError("Bat runs aur bye/leg-bye ek saath nahi ho sakte")
+
+    # Wide + bye/leg-bye ek saath — wahi runs do baar ginne jaate
+    if extras.get('wide', 0) > 0 and (extras.get('bye', 0) > 0
+                                      or extras.get('legbye', 0) > 0):
+        raise ScoringError("Wide par bye/leg-bye alag se nahi ho sakte")
+
+    # Bye aur leg-bye ek saath impossible — ek ball ek hi tarah ka extra
+    if extras.get('bye', 0) > 0 and extras.get('legbye', 0) > 0:
+        raise ScoringError("Bye aur leg-bye ek saath nahi ho sakte")
+
+    # Penalty hamesha 5 runs hoti hai (BE-H4: up to 6 allow karna galat)
+    if extras.get('penalty', 0) not in (0, 5):
+        raise ScoringError("Penalty hamesha 5 runs hoti hai")
+
+    # Wicket ke saath bat runs: sirf run-out par completed runs ho sakte
+    # hain — bowled/caught/lbw/stumped/hitwicket/retired/obstructing
+    # par bat se run impossible hai.
+    if is_wicket and runs_off_bat > 0 and wicket_type != 'runout':
+        raise ScoringError(
+            "Wicket ke saath bat runs sirf run-out par ho sakte hain")
+
     # No-ball par wicket nahi (except runout)
     if extras.get('noball', 0) > 0 and is_wicket:
         if wicket_type != 'runout':
@@ -141,9 +166,13 @@ class InningsState:
             self.legal_balls += 1
 
         # --- Batter stats ---
+        # BE-H4: no-ball par bat runs batter ko milte hain (ball count
+        # nahi hoti, runs hote hain) — pehle is_legal gate se ye runs
+        # gayab ho jaate the jabki bowler ke runs me jud jaate the.
         striker = self.batters.get(self.current_striker)
-        if striker and is_legal:
-            striker['balls'] += 1
+        if striker:
+            if is_legal:
+                striker['balls'] += 1
             striker['runs'] += runs_off_bat
             if runs_off_bat == 4:
                 striker['fours'] += 1
@@ -161,7 +190,10 @@ class InningsState:
             bowler['noballs'] += extras.get('noball', 0)
             if total_runs == 0 and is_legal:
                 bowler['dots'] += 1
-            if is_wicket and wicket_type != 'runout':
+            # BE-H4: bowler ka wicket sirf bowler's wickets par —
+            # retired / obstructing (aur run-out) bowler ke khate me nahi.
+            if is_wicket and wicket_type in {
+                    'bowled', 'caught', 'lbw', 'stumped', 'hitwicket'}:
                 bowler['wickets'] += 1
 
         # --- Wicket ---

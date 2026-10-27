@@ -1,7 +1,9 @@
 from flask import Blueprint, request, jsonify, current_app
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from werkzeug.exceptions import RequestEntityTooLarge
+from flask_jwt_extended import jwt_required
+from werkzeug.exceptions import RequestEntityTooLarge, HTTPException
 from extensions import db, limiter
+from models.security import TaskOwnership
+from api.routes.common import current_user_id
 from config import Config
 import os
 import uuid
@@ -19,7 +21,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 @limiter.limit("10 per hour")  # upload abuse roko
 def upload_video():
     try:
-        current_user_id = int(get_jwt_identity())
+        uid = current_user_id()
 
         if 'video' not in request.files:
             return jsonify({'message': 'No video file provided'}), 400
@@ -58,7 +60,11 @@ def upload_video():
 
         video_file.save(video_path)
 
-        # Video validity check — ffprobe se duration nikalo
+        # Video validity check — ffprobe se duration nikalo.
+        # SEC-H2: pehle ffprobe failure swallow ho jati thi (pass),
+        # aur Docker image me ffprobe tha hi nahi — 10-min limit
+        # kabhi chalta hi nahi tha. Ab failure / missing duration =
+        # reject (file delete karke), pass-through nahi.
         try:
             import subprocess, json
             probe = subprocess.run(
@@ -68,6 +74,8 @@ def upload_video():
             )
             info = json.loads(probe.stdout)
             duration = float(info.get('format', {}).get('duration', 0))
+            if not duration:
+                raise ValueError('duration missing')
             if duration > 600:  # 10 min se zyada
                 os.remove(video_path)
                 return jsonify({
@@ -75,10 +83,26 @@ def upload_video():
                                f'Chhota clip upload karo.'
                 }), 400
         except Exception:
-            pass  # ffprobe fail ho to aage badho, worker handle karega
+            if os.path.exists(video_path):
+                os.remove(video_path)
+            return jsonify({
+                'message': 'Video validate nahi ho saka — corrupt ya '
+                           'unsupported file ho sakti hai.'
+            }), 400
 
         # Background me processing shuru karo
-        task = process_video_task.delay(video_path, current_user_id)
+        task = process_video_task.delay(video_path, uid)
+
+        # SEC-C4: task_id -> user_id binding likho, taaki status
+        # endpoint sirf uploader ko result de. DB me hai, isliye
+        # kisi bhi backend worker se poll karne par bhi kaam karega.
+        try:
+            db.session.add(TaskOwnership(task_id=task.id, user_id=uid))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            current_app.logger.exception(
+                "TaskOwnership write failed for task %s", task.id)
 
         # Server ka filesystem path client ko mat do — sirf task_id kaafi hai
         return jsonify({
@@ -90,5 +114,8 @@ def upload_video():
     except RequestEntityTooLarge:
         # Bahar phenko taaki app-level 413 handler saaf JSON de
         raise
-    except Exception as e:
-        return jsonify({'message': f'Upload error: {str(e)}'}), 500
+    except HTTPException:
+        raise
+    except Exception:
+        current_app.logger.exception("Upload failed")
+        return jsonify({'message': 'Upload failed'}), 500

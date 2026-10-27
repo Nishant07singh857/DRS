@@ -5,9 +5,12 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Install system dependencies for OpenCV and other libraries
+# SEC-H2: ffmpeg/ffprobe zaroori hai — bina iske upload duration
+# check (10-min limit) kabhi chalta hi nahi tha.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     libglib2.0-0 \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies

@@ -63,8 +63,12 @@ class OverSummary:
                   for b in self.balls
                   if b.get('delivery_analysis', {}).get('speed_kmh')]
 
-        # LBW shouts
-        lbw_appeals = [b for b in self.balls if b.get('decision') in ('OUT', "UMPIRE'S CALL")]
+        # LBW shouts (BE-L2): drs_logic kabhi "UMPIRE'S CALL" decision
+        # emit nahi karta — wo on-field call ('OUT'/'NOT OUT') deta hai
+        # umpires_call=True ke saath — isliye marginal appeals bhi gino.
+        lbw_appeals = [b for b in self.balls
+                       if b.get('decision') in ('OUT', "UMPIRE'S CALL")
+                       or b.get('umpires_call') is True]
 
         return {
             'over': self.over_number,
@@ -83,7 +87,15 @@ class OverSummary:
 
     def to_html_report(self):
         """Simple HTML report — PDF banane ke liye bhi use hota hai."""
+        # BE-M6: bowler/batsman names raw interpolate nahi hote — HTML
+        # escape karo (XSS vector tha).
+        import html as _html
+        bowler = _html.escape(str(self.bowler))
+        batsman = _html.escape(str(self.batsman))
         s = self.get_summary()
+        s = dict(s)
+        s['bowler'] = bowler
+        s['batsman'] = batsman
         html = f"""
         <html><head><style>
         body {{ font-family: Arial; margin: 20px; }}
@@ -108,11 +120,16 @@ class OverSummary:
         <tr><th>Ball</th><th>Speed</th><th>Length</th><th>Line</th>
             <th>Outcome</th><th>LBW</th></tr>
         """
+        # BE-H8: header me 6 columns hain (Ball, Speed, Length, Line,
+        # Outcome, LBW) — har row me bhi 6 <td> hone chahiye. Pehle row
+        # me sirf 5 the (delivery_type "Length" ke neeche tha, aur LBW
+        # column khaali reh jaata tha).
         for b in s['balls_detail']:
             da = b.get('delivery_analysis', {})
             html += (f"<tr><td>{b['ball']}</td>"
                      f"<td>{da.get('speed_kmh', '-') or '-'}</td>"
                      f"<td>{da.get('delivery_type', '-')}</td>"
+                     f"<td>{b.get('line', '-')}</td>"
                      f"<td>{b.get('outcome', '-')}</td>"
                      f"<td>{b.get('decision', '-')}</td></tr>")
         html += "</table>"

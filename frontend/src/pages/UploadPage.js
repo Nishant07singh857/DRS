@@ -1,8 +1,12 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { uploadVideo, getTaskStatus } from '../api/apiService';
 
 const POLL_INTERVAL_MS = 2000;
+// FE-H5: backend ki 10-minute video limit se match karta cap —
+// 10 min / 2s = 300 attempts. Uske baad terminal error, hamesha
+// polling nahi.
+const MAX_POLL_ATTEMPTS = 300;
 
 function UploadPage() {
   const [file, setFile] = useState(null);
@@ -12,7 +16,20 @@ function UploadPage() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
   const pollTimer = useRef(null);
+  const pollAttempts = useRef(0);
   const navigate = useNavigate();
+
+  const stopPolling = () => {
+    if (pollTimer.current) {
+      clearInterval(pollTimer.current);
+      pollTimer.current = null;
+    }
+  };
+
+  // FE-H5: unmount par interval cleanup — pehle page chhodne par bhi
+  // interval chalta rehta tha aur unmounted component par setState
+  // karta tha.
+  useEffect(() => () => stopPolling(), []);
 
   const handleFileChange = (e) => {
     setFile(e.target.files[0] || null);
@@ -20,24 +37,44 @@ function UploadPage() {
   };
 
   const pollStatus = (taskId) => {
+    // FE-H5: task_id missing ho to /tasks/undefined/status par
+    // PENDING-forever poll nahi — turant terminal error.
+    if (!taskId) {
+      setError('Upload se task id nahi mili — dobara try karo ya review list check karo.');
+      setStage('error');
+      return;
+    }
+    pollAttempts.current = 0;
     pollTimer.current = setInterval(async () => {
+      pollAttempts.current += 1;
+      if (pollAttempts.current > MAX_POLL_ATTEMPTS) {
+        stopPolling();
+        setError('Processing timed out (10 min) — try again ya review list check karo, wahan review aa sakta hai.');
+        setStage('error');
+        return;
+      }
       try {
         const res = await getTaskStatus(taskId);
         const { state, result: taskResult } = res.data;
         if (state === 'PROGRESS') {
           setProgress(taskResult);
         } else if (state === 'SUCCESS') {
-          clearInterval(pollTimer.current);
+          stopPolling();
           setResult(taskResult);
           setStage('done');
         } else if (state === 'FAILURE') {
-          clearInterval(pollTimer.current);
+          stopPolling();
           setError(typeof taskResult === 'string' ? taskResult : 'Processing failed');
           setStage('error');
+        } else if (state === 'REVOKED') {
+          // Pehle ye state fall-through hoti thi — hamesha poll.
+          stopPolling();
+          setError('Processing cancel ho gaya — dobara try karo.');
+          setStage('error');
         }
-        // PENDING: bas wait karo
+        // PENDING: bas wait karo (cap tak)
       } catch (err) {
-        clearInterval(pollTimer.current);
+        stopPolling();
         setError('Status check failed');
         setStage('error');
       }
@@ -122,10 +159,17 @@ function UploadPage() {
           <h2 className="text-2xl font-bold mb-2">Analysis Complete</h2>
           {decision ? (
             <>
-              <p className={`text-5xl font-bold my-4 ${decision.final_decision === 'OUT' ? 'text-red-500' : decision.final_decision === "UMPIRE'S CALL" ? 'text-amber-500' : 'text-green-500'}`}>
+              <p className={`text-5xl font-bold my-4 ${decision.umpires_call ? 'text-amber-500' : decision.final_decision === 'OUT' ? 'text-red-500' : 'text-green-500'}`}>
                 {decision.final_decision}
               </p>
-              <p className="text-gray-400">Confidence: {decision.confidence}%</p>
+              {/* FE-H7: marginal call par UMPIRE'S CALL badge — backend
+                  decision string me ye kabhi nahi bhejta, flag me bhejta hai. */}
+              {decision.umpires_call && (
+                <p className="text-amber-400 font-bold mb-2">
+                  ⚖️ UMPIRE'S CALL — on-field decision stands
+                </p>
+              )}
+              <p className="text-gray-400">Confidence: {decision.confidence != null ? `${decision.confidence}%` : 'N/A'}</p>
               <button
                 onClick={() => navigate('/reviews')}
                 className="mt-4 bg-indigo-600 px-4 py-2 rounded hover:bg-indigo-700"

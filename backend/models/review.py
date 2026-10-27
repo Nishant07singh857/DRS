@@ -1,3 +1,5 @@
+import os
+
 from extensions import db
 from datetime import datetime
 
@@ -41,10 +43,20 @@ class Review(db.Model):
                            onupdate=datetime.utcnow)
 
     def to_dict(self):
+        # BE-H9: YEHI ek serializer hai — list/detail (reviews.py
+        # _serialize) aur request/complete/confirm/retry/queue sab isi
+        # ko use karte hain, isliye koi field kisi endpoint par gayab
+        # nahi hoti (pehle list/detail me delivery_id nahi tha, aur
+        # baaki me video_url nahi tha).
+        video_name = (os.path.basename(self.video_path)
+                      if self.video_path else self.video_path)
         return {
             'id': self.id,
             'user_id': self.user_id,
-            'video_path': self.video_path,
+            # SEC-M1: never disclose the absolute server path — only
+            # the file identifier (basename) leaves the server.
+            'video_path': video_name,
+            'video_url': video_name,
             'decision': self.decision,
             'confidence': self.confidence,
             'analysis_data': self.analysis_data,
@@ -60,6 +72,7 @@ class Review(db.Model):
             'final_decision': self.final_decision,
             'confirmed_by': self.confirmed_by,
             'confirmed_at': self.confirmed_at.isoformat() if self.confirmed_at else None,
+            'confirmation_note': self.confirmation_note,
             'is_locked': self.is_locked,
             'evidence': self.evidence,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,

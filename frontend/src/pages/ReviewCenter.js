@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getReviewById } from '../api/apiService';
+import { getReviewById, getBookmarks, fetchReviewVideoObjectUrl, reviewVideoBasename, reviewVideoUrl } from '../api/apiService';
 import api from '../api/apiService';
 import VideoReviewPlayer from '../components/VideoReviewPlayer';
 import DRSReviewScreen from '../components/DRSReviewScreen';
@@ -24,6 +24,13 @@ function ReviewCenter() {
   const [overrideDecision, setOverrideDecision] = useState('OUT');
   const [note, setNote] = useState('');
   const [showOverride, setShowOverride] = useState(false);
+  // FE-C1: video blob object URL (JWT route ko <video> seedha nahi
+  // khol sakta — Bearer header chahiye, isliye axios blob fetch).
+  const [videoObjectUrl, setVideoObjectUrl] = useState(null);
+  const [videoError, setVideoError] = useState('');
+  // FE-M3: bookmarks pehle hamesha [] the; match-linked review par
+  // backend se lao, warna khaali (upload review ka match_id null).
+  const [bookmarks, setBookmarks] = useState([]);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -37,6 +44,50 @@ function ReviewCenter() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!review) return;
+    if (review.match_id) {
+      getBookmarks(review.match_id)
+        .then((res) => setBookmarks(Array.isArray(res.data) ? res.data : []))
+        .catch(() => setBookmarks([]));
+    } else {
+      setBookmarks([]);
+    }
+  }, [review]);
+
+  useEffect(() => {
+    let objectUrl = null;
+    let cancelled = false;
+    // FE-C1: bare server path (jaise /app/uploads/…) ab playable
+    // NAHI mana jata — reviewVideoBasename us par null deta hai,
+    // isliye player ki jagah saaf "video nahi mili" message aata hai,
+    // HTML khilane wala silent fail nahi. Direct http(s) URL ho to
+    // use seedha player ko do (blob fetch ki zaroorat nahi).
+    const rawUrl = reviewVideoUrl(review);
+    if (review && rawUrl && /^https?:\/\//i.test(rawUrl)) {
+      setVideoObjectUrl(rawUrl);
+      setVideoError('');
+    } else if (review && reviewVideoBasename(review)) {
+      fetchReviewVideoObjectUrl(review)
+        .then((url) => {
+          if (cancelled) {
+            if (url && url.startsWith('blob:')) URL.revokeObjectURL(url);
+            return;
+          }
+          objectUrl = url;
+          setVideoObjectUrl(url);
+          setVideoError(url ? '' : 'Is review ke liye playable video nahi mili.');
+        })
+        .catch(() => {
+          if (!cancelled) setVideoError('Video load nahi ho payi — access ya file missing ho sakti hai.');
+        });
+    }
+    return () => {
+      cancelled = true;
+      if (objectUrl && objectUrl.startsWith('blob:')) URL.revokeObjectURL(objectUrl);
+    };
+  }, [review]);
 
   const doAction = (action, finalDecision) => {
     setActing(true);
@@ -61,13 +112,21 @@ function ReviewCenter() {
   if (!review) return <div className="text-center mt-10">Review not found.</div>;
 
   const analysis = review.analysis_data || {};
+  // FE-H2: Phase 3 ke baad pipeline reviews 'completed' (ya
+  // 'inconclusive') + ai_recommendation ke saath bante hain, isliye
+  // ye gate ab upload flow par bhi khulta hai — pehle status
+  // default 'pending' + ai_recommendation NULL tha, isliye kabhi
+  // nahi khulta tha. Confirm endpoint khud bhi completed/
+  // inconclusive maangta hai, isliye gate ko usse alag mat karo:
+  // pending/processing review par actions dikhane ki jagah saaf
+  // wajah dikhao (neeche), taaki decided review undecided na lage.
   const canDecide =
     !review.is_locked &&
     (review.status === 'completed' || review.status === 'inconclusive');
-
-  // video_url backend me server path bhi ho sakta hai — playable ho to hi player dikhao
-  const videoUrl = review.video_url || '';
-  const playable = /^(https?:)?\/\//i.test(videoUrl) || videoUrl.startsWith('/');
+  // Backend INCONCLUSIVE accept nahi karta (valid final decision
+  // nahi) — accept button ko disabled + wajah ke saath dikhao,
+  // taaki click par 400 ka surprise na ho.
+  const acceptBlocked = review.ai_recommendation === 'INCONCLUSIVE';
 
   return (
     <div className="container mx-auto max-w-7xl">
@@ -91,12 +150,14 @@ function ReviewCenter() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left: video + trajectory */}
         <div className="lg:col-span-2 space-y-6">
-          {playable ? (
-            <VideoReviewPlayer videoUrl={videoUrl} bookmarks={[]} fps={30} />
+          {videoObjectUrl ? (
+            <VideoReviewPlayer videoUrl={videoObjectUrl} bookmarks={bookmarks} fps={30} />
           ) : (
             <div className="bg-gray-800 rounded-xl p-8 text-center text-gray-500">
-              Is review ke liye playable video nahi mili.
-              <div className="text-xs mt-2 text-gray-600">({videoUrl || 'koi video path nahi'})</div>
+              {videoError || 'Is review ke liye playable video nahi mili.'}
+              <div className="text-xs mt-2 text-gray-600">
+                ({review.video_url || review.video_path || 'koi video path nahi'})
+              </div>
             </div>
           )}
 
@@ -113,9 +174,14 @@ function ReviewCenter() {
           {canDecide && (
             <div className="bg-gray-800 rounded-xl p-5 border border-gray-700">
               <h3 className="text-lg font-semibold mb-3">Umpire Decision</h3>
+              {acceptBlocked && (
+                <p className="text-sm text-amber-300 mb-3">
+                  AI recommendation INCONCLUSIVE hai — accept valid final decision nahi hai; reject ya override karo.
+                </p>
+              )}
               <div className="flex flex-col gap-2">
                 <button
-                  disabled={acting}
+                  disabled={acting || acceptBlocked}
                   onClick={() => doAction('accept')}
                   className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold py-2 px-4 rounded-lg"
                 >
@@ -176,6 +242,20 @@ function ReviewCenter() {
               )}
               <p className="mt-2 text-xs text-gray-500">
                 Decision ke baad review lock ho jayega — badla nahi ja sakta.
+              </p>
+            </div>
+          )}
+
+          {!canDecide && !review.is_locked && (
+            <div className="bg-gray-800 rounded-xl p-5 border border-gray-700">
+              <h3 className="text-lg font-semibold mb-2">Umpire Decision</h3>
+              <p className="text-sm text-gray-400">
+                Umpire actions is review par abhi available nahi hain — status
+                '{review.status || 'unknown'}' hai; confirm ke liye status
+                'completed' ya 'inconclusive' hona chahiye.
+                {review.decision && review.decision !== 'PENDING' && (
+                  <> Upar dikhaya gaya AI decision ({review.decision}) abhi final/locked nahi hai.</>
+                )}
               </p>
             </div>
           )}
